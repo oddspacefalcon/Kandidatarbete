@@ -51,7 +51,7 @@ class MCTS():
 
         terminal = False # 0 eller 1 som dom?
         
-        while not terminal and current_level <= number_of_levels:
+        while not terminal and self.current_level <= self.number_of_levels:
             if len(current_node.nodes) == 0:
                 # om noden vi är på inte har några barnnoder skapar vi nya tillstånd och kör roll_out
                 self.expand()
