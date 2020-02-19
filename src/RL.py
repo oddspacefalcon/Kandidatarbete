@@ -116,11 +116,15 @@ class RL():
             , och rewarden för denna action+state (innan)
 
 
-        ''' 
+        '''
         mini_batch = Transition(*zip(*transitions)) #Fattar inte riktigt vad denna gör
+
         # unpack action batch
-        batch_actions = Action(*zip(*mini_batch.action))'''omforming för att få inputs som man kan stoppa i nätvärken'''
+        batch_actions = Action(*zip(*mini_batch.action))
+        #print(mini_batch)
         batch_actions = np.array(batch_actions.action) - 1
+        #print(mini_batch.action)
+        #print(batch_actions)
         batch_actions = torch.Tensor(batch_actions).long()
         batch_actions = batch_actions.to(self.device)
         # preprocess batch_input and batch_target_input for the network
@@ -144,26 +148,21 @@ class RL():
         loss.backward()
         optimizer.step()
 
-'''
-Definerar loss funktionen: Fattar inte riktigt hur denna fungerar
---> värkar som man har lossfunktionen på ett annat ställe (man provar ändast att få nogot som ska likna den förra bättre...)
-Sedan updaterar man om minnet är uppställt på ett speciellt sätt
-'''
+    '''
+    Definerar loss funktionen: Fattar inte riktigt hur denna fungerar
+    --> värkar som man har lossfunktionen på ett annat ställe (man provar ändast att få nogot som ska likna den förra bättre...)
+    Sedan updaterar man om minnet är uppställt på ett speciellt sätt
+    '''
     def get_loss(self, criterion, optimizer, y, output, weights, indices):
         loss = criterion(y, output)
         optimizer.zero_grad()
         # for prioritized experience replay
         if self.replay_memory == 'proportional':
-            loss = convert_from_np_to_tensor(np.array(weights)) * loss.cpu() '''Fattar inte vad denna gör'''
+            loss = convert_from_np_to_tensor(np.array(weights)) * loss.cpu()
             priorities = loss
             priorities = np.absolute(priorities.detach().numpy())
             self.memory.priority_update(indices, priorities)
         return loss.mean()
-
-'''
-Fattar inte riktigt denna 
-Ger en bästa actions, och output för target net? 
-'''
 
     def get_network_output_next_state(self, batch_next_state=float, batch_size=int, action_index=None):
         self.target_net.eval()
@@ -184,10 +183,12 @@ Ger en bästa actions, och output för target net?
                 # select greedy action 
                 with torch.no_grad():        
                     net_output = self.target_net(perspectives)
-                    q_values_table = np.array(net_output.cpu()) '''Ger Q values som en lista 3 Qvals
-                                                            för olika opperatorer i en annan lista för alla perspektiv'''
-                    row, col = np.where(q_values_table == np.max(q_values_table)) '''Hittar de med max q-värde'''
-                    if action_index[i] == None:                     '''Fattar inte vad action index är... --> tror denna är random selection?'''
+                    '''Ger Q values som en lista 3 Qvals för olika opperatorer i en annan lista för alla perspektiv'''
+                    q_values_table = np.array(net_output.cpu()) 
+                    '''Hittar de med max q-värde'''
+                    row, col = np.where(q_values_table == np.max(q_values_table))
+                    '''Fattar inte vad action index är... --> tror denna är random selection?'''
+                    if action_index[i] == None:
                         batch_network_output[i] = q_values_table[row[0], col[0]]   #Tar antingen  absolut bästa action                
                     elif action_index[i] != None:
                         action_from_policy_net = int(action_index[i])
@@ -216,12 +217,10 @@ Ger en bästa actions, och output för target net?
         batch_input = convert_from_np_to_tensor(batch_input)
         return batch_input.to(self.device)
 
+    '''
+    Skjälva huvudelen av programmet: train
 
-
-'''
-Skjälva huvudelen av programmet: train
-
-'''
+    '''
     def train(self, training_steps=int, target_update=int, epsilon_start=1.0, num_of_epsilon_steps=10, 
         epsilon_end=0.1, reach_final_epsilon=0.5, optimizer=str,
         batch_size=int, replay_start_size=int, minimum_nbr_of_qubit_errors=0):
@@ -363,7 +362,7 @@ Skjälva huvudelen av programmet: train
             perspective = row[0]
             max_q_action = col[0] + 1
             step = Action(batch_position_actions[perspective], max_q_action)
-            if prev_action == step: '''Fattar inte denna, vad är res och vad är heapq, sedan varför ska jag använda denna för att ta ny action'''
+            if prev_action == step: #'''Fattar inte denna, vad är res och vad är heapq, sedan varför ska jag använda denna för att ta ny action'''
                 res = heapq.nlargest(2, q_values_table.flatten()) #Denna hittar den näst största, och så använder man denna istället...
                 row, col = np.where(q_values_table == res[1])#Varför vill man inte göra samma sak igjenn?
                 perspective = row[0]
@@ -380,10 +379,9 @@ Skjälva huvudelen av programmet: train
         return step, q_value
 
 
-'''
-Kollar hur bra nätvärket är på att lösa denna.
-'''
-#Vet ej vad denna gör: är det att den ändast går igjenom alla steg?'''
+    '''
+    Kollar hur bra nätvärket är på att lösa denna.
+    '''
     def prediction(self, num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH=None, plot_one_episode=False, 
         show_network=False, show_plot=False, prediction_list_p_error=float, minimum_nbr_of_qubit_errors=0, print_Q_values=False, save_prediction=True):
         # load network for prediction and set eval mode 
