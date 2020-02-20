@@ -2,7 +2,7 @@ from src.toric_model import Toric_code
 from ResNet import ResNet18
 from src.MCTS import MCTS
 
-for i in range(20):
+for i in range(3):
     device = 'cpu'
 
     system_size = 7
@@ -13,12 +13,16 @@ for i in range(20):
 
     model = ResNet18()
 
-    args = {'cpuct': 0.5, 'num_simulations':3, 'grid_shift': system_size//2}
+    args = {'cpuct': 0.5, 'num_simulations':10, 'grid_shift': system_size//2}
 
     mcts = MCTS(toric_code, model, device, args)
 
-    pi, z = mcts.get_probs_values()
+    pi, z = mcts.get_probs_v()
+
+    print('antal perspektiv:', len(pi))
 
     print('pi:', pi, 'z:', z)
 
     print('----------------------------------')
+
+

@@ -3,6 +3,7 @@ from .toric_model import Toric_code
 from .util import Perspective, Action, convert_from_np_to_tensor
 import math
 import copy
+import torch
 EPS = 1e-8
 
 class MCTS():
@@ -19,19 +20,19 @@ class MCTS():
         self.Ns = {}        # stores #times board s was visited
         self.Ps = {}        # stores initial policy (returned by neural net)
         self.device = device # 'cpu'
-
+        self.actions = []
+        self.current_level = 0
 
     def search(self, state):
-        # np.arrays är unhasable, behöver string
-        s = copy.deepcopy(np.array_str(self.toric_code.current_state))
+        # np.arrays är unhashable, behöver string
+        s = copy.deepcopy(np.array_str(state.current_state))
 
         if np.all(state.current_state == 0):
             # if terminal state
             return 1 # terminal <=> vunnit
 
-        perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
+        perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state) # genererar väl inte olika olika ggr???
         number_of_perspectives = len(perspectives) - 1
-        # preprocess batch of perspectives and actions 
         perspectives = Perspective(*zip(*perspectives))
         batch_perspectives = np.array(perspectives.perspective)
         batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
@@ -58,9 +59,15 @@ class MCTS():
 
         # pick the action with the highest upper confidence bound, using all perspectives of toric code s
 
+        self.current_level += 1
+
         for perspective in range(number_of_perspectives):
             for action in range(1, 4):
+
                 a = Action(batch_position_actions[perspective], action)
+
+                if self.current_level == 1:
+                    self.actions.append(a)
 
                 if (s,a) in self.Qsa:
                     u = self.Qsa[(s,a)] + self.args['cpuct']*self.Ps[s][perspective][action-1]*\
@@ -88,27 +95,14 @@ class MCTS():
         self.Ns[s] += 1
         return v
 
-
-    def get_probs_values(self, temp=1):
+    def get_probs_v(self, temp=1):
 
         s = copy.deepcopy(np.array_str(self.toric_code.current_state))
 
         for i in range(self.args['num_simulations']):
             v = self.search(self.toric_code)
-
-        perspectives = self.toric_code.generate_perspective(self.args['grid_shift'], self.toric_code.current_state)
-        number_of_perspectives = len(perspectives) - 1
-        # preprocess batch of perspectives and actions 
-        perspectives = Perspective(*zip(*perspectives))
-        batch_perspectives = np.array(perspectives.perspective)
-        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-        batch_perspectives = batch_perspectives.to(self.device)
-        batch_position_actions = perspectives.position
-
-        actions = [Action(batch_position_actions[perspective], action) for perspective \
-             in range(number_of_perspectives) for action in range(1, 4)]
         
-        counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in actions]
+        counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in self.actions]
 
         if temp==0:
             bestA = np.argmax(counts)
@@ -119,4 +113,6 @@ class MCTS():
         counts = [x**(1./temp) for x in counts]
         counts_sum = float(sum(counts))
         probs = [x/counts_sum for x in counts]
+        probs = torch.tensor(probs)
+        probs = probs.view(-1, 3)
         return probs, v
