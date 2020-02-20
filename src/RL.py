@@ -211,6 +211,7 @@ class RL():
                 action = self.select_action(number_of_actions=self.number_of_actions,
                                             epsilon=epsilon, 
                                             grid_shift=self.grid_shift)
+                # action = MCTS(self.toric)
                 self.toric.step(action)
                 reward = self.get_reward()
                 # generate memory entry
@@ -303,7 +304,7 @@ class RL():
             row, col = np.where(q_values_table == np.max(q_values_table))
             perspective = row[0]
             max_q_action = col[0] + 1
-            step = Action(batch_position_actions[perspective], max_q_action)
+            step = Action(batch_position_actions[perspective], max_q_action) # Action = namedtuple('Action', ['position', 'action'])
             if prev_action == step:
                 res = heapq.nlargest(2, q_values_table.flatten())
                 row, col = np.where(q_values_table == res[1])

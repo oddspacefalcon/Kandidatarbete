@@ -1,62 +1,122 @@
-import Node
-import Edge
+import numpy as np
+from .toric_model import Toric_code
+from .util import Perspective, Action, convert_from_np_to_tensor
+import math
+import copy
+EPS = 1e-8
 
 class MCTS():
     """
-    Innehåller mcts-metoderna och huvudmetoden som skapar trädet mha Node- och Edge-klasserna
+    Ett objekt representerar ett MCTS-träd
     """
 
-    def __init__(self, number_of_levels, root_state):
-        self.number_of_levels = number_of_levels
-        self.root_node = Node(root_state)
-        self.current_node = root_node
-        self.current_level = 1
-
-    def UCB(self, root_node_state, action):
-        pass
-
-    # De fyra faserna:
-
-    def selection(self, current_node):
-        """
-        Börja med rotnoden och gå ner i trädet med hjälp av UCB-funktionen
-        tills det att en nod som inte har några barn nås.
-        """
-        pass
-
-    def expand(self):
-        """
-        Om noden inte är terminal skapas tre nya tillstånd, för X, Y och Z.
-        Välj sedan (slumpmässigt) den första av dessa. Öka current_level med 1
-        """
-        pass
+    def __init__(self, toric_code, model, device, args):
+        self.toric_code = toric_code # toric_model-objekt
+        self.model = model  # resnet
+        self.args = args    # c_puct, num_simulations (antalet noder), grid_shift 
+        self.Qsa = {}       # stores Q values for s,a (as defined in the paper)
+        self.Nsa = {}       # stores #times edge s,a was visited
+        self.Ns = {}        # stores #times board s was visited
+        self.Ps = {}        # stores initial policy (returned by neural net)
+        self.device = device # 'cpu'
 
 
-    def roll_out(self):
-        """
-        Kör klart episoden från den nuvarande noden genom att bara välja den med maximalt
-        Q värde från nätverket.
-        """
-        return terminal_value
+    def search(self, state):
+        # np.arrays är unhasable, behöver string
+        s = copy.deepcopy(np.array_str(self.toric_code.current_state))
 
-    def backprop(self, terminal_value):
-        """
-        Uppdatera vikterna hos alla edges längs den gångna vägen.
-        """
-        pass
+        if np.all(state.current_state == 0):
+            # if terminal state
+            return 1 # terminal <=> vunnit
+
+        perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
+        number_of_perspectives = len(perspectives) - 1
+        # preprocess batch of perspectives and actions 
+        perspectives = Perspective(*zip(*perspectives))
+        batch_perspectives = np.array(perspectives.perspective)
+        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+        batch_perspectives = batch_perspectives.to(self.device)
+        batch_position_actions = perspectives.position
+
+        if s not in self.Ps:
+            # leaf node => expand
+            self.Ps[s] = self.model.forward(batch_perspectives)
+
+            # defects_state = np.sum(self.perspective)
+            # defects_next_state = np.sum(self.toric.next_state)
+            # v = defects_state - defects_next_state
+
+            self.Ns[s] = 0
+
+            # tills resnet är fixad
+            v = 0
+            return v
 
 
-    # Skapa trädet
-    def make_tree(self):
+        cur_best = -float('inf')
+        best_act = -1
 
-        terminal = False # 0 eller 1 som dom?
+        # pick the action with the highest upper confidence bound, using all perspectives of toric code s
+
+        for perspective in range(number_of_perspectives):
+            for action in range(1, 4):
+                a = Action(batch_position_actions[perspective], action)
+
+                if (s,a) in self.Qsa:
+                    u = self.Qsa[(s,a)] + self.args['cpuct']*self.Ps[s][perspective][action-1]*\
+                        math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
+                else:
+                    u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
+                
+                if u > cur_best:
+                    cur_best = u
+                    best_act = a
+
+        a = best_act
+        state.step(a)
+        state.current_state = state.next_state
+
+        v = self.search(copy.deepcopy(state))
+
+        if (s,a) in self.Qsa:
+            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)]+1)
+            self.Nsa[(s,a)] += 1
+        else:
+            self.Qsa[(s,a)] = v
+            self.Nsa[(s,a)] = 1
+
+        self.Ns[s] += 1
+        return v
+
+
+    def get_probs_values(self, temp=1):
+
+        s = copy.deepcopy(np.array_str(self.toric_code.current_state))
+
+        for i in range(self.args['num_simulations']):
+            v = self.search(self.toric_code)
+
+        perspectives = self.toric_code.generate_perspective(self.args['grid_shift'], self.toric_code.current_state)
+        number_of_perspectives = len(perspectives) - 1
+        # preprocess batch of perspectives and actions 
+        perspectives = Perspective(*zip(*perspectives))
+        batch_perspectives = np.array(perspectives.perspective)
+        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+        batch_perspectives = batch_perspectives.to(self.device)
+        batch_position_actions = perspectives.position
+
+        actions = [Action(batch_position_actions[perspective], action) for perspective \
+             in range(number_of_perspectives) for action in range(1, 4)]
         
-        while not terminal and self.current_level <= self.number_of_levels:
-            if len(current_node.nodes) == 0:
-                # om noden vi är på inte har några barnnoder skapar vi nya tillstånd och kör roll_out
-                self.expand()
-                terminal_value = self.roll_out()
-                self.backprop(terminal_value)
-            else:
-                # annars går vi genom trädet tills nod utan barnnoder nås
-                self.selection()
+        counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in actions]
+
+        if temp==0:
+            bestA = np.argmax(counts)
+            probs = [0]*len(counts)
+            probs[bestA]=1
+            return probs, v
+
+        counts = [x**(1./temp) for x in counts]
+        counts_sum = float(sum(counts))
+        probs = [x/counts_sum for x in counts]
+        return probs, v
