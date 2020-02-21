@@ -53,7 +53,6 @@ class MCTS():
             v = 0
             return v
 
-
         cur_best = -float('inf')
         best_act = -1
 
@@ -97,7 +96,7 @@ class MCTS():
 
     def get_probs_v(self, temp=1):
 
-        s = copy.deepcopy(np.array_str(self.toric_code.current_state))
+        s = np.array_str(self.toric_code.current_state)
 
         for i in range(self.args['num_simulations']):
             v = self.search(self.toric_code)
