@@ -4,6 +4,7 @@ from .util import Perspective, Action, convert_from_np_to_tensor
 import math
 import copy
 import torch
+import random
 EPS = 1e-8
 
 class MCTS():
@@ -26,12 +27,7 @@ class MCTS():
 
     def search(self, state):
         # np.arrays är unhashable, behöver string
-        s = copy.deepcopy(np.array_str(state.current_state))
-
-        if np.all(state.current_state == 0):
-            # if terminal state
-            return 100 # ? Davids rewardsystem
-            #return 1 # terminal <=> vunnit
+        s = np.array_str(state.current_state)
 
         perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state) # genererar väl inte olika olika ggr???
         number_of_perspectives = len(perspectives) - 1
@@ -41,20 +37,25 @@ class MCTS():
         batch_perspectives = batch_perspectives.to(self.device)
         batch_position_actions = perspectives.position
 
+        if np.all(state.current_state == 0):
+            # if terminal state
+            # Davids rewardsystem / number_of_perspectives. Ett försök att få samma skala i UCB som alphago. Tål att tänkas mer på
+            return 100 / number_of_perspectives
+            #return 1 # terminal <=> vunnit
+
         if s not in self.Ps:
             # leaf node => expand
             self.Ps[s] = self.model.forward(batch_perspectives)
 
             self.Ns[s] = 0
 
-            # tills resnet eller annat rewardsystem är fixat
-            v = 0
-            #return v
+            #return random.random()
             
-            #Alt: Davids system, straffar introduktion av nya errors, når snabbare terminal:
             E_t = np.sum(state.last_state)
             E_t1 = np.sum(state.current_state)
-            return E_t - E_t1
+            # Davids rewardsystem / number_of_perspectives. Ett försök att få samma skala i UCB som alphago. Tål att tänkas mer på
+            #print((E_t - E_t1) / number_of_perspectives)
+            return (E_t - E_t1) / number_of_perspectives
 
         cur_best = -float('inf')
         best_act = -1
@@ -99,12 +100,13 @@ class MCTS():
         self.Ns[s] += 1
         return v
 
-    def get_probs_v(self, temp=1):
+    def get_probs_actions(self, temp=1):
 
         s = np.array_str(self.toric_code.current_state)
 
         for i in range(self.args['num_simulations']):
-            v = self.search(self.toric_code)
+             # om inte kopia så sparas alla operationer man gör på toric koden mellan varje iteration
+            self.search(copy.deepcopy(self.toric_code))
         
         counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in self.actions]
 
@@ -112,11 +114,11 @@ class MCTS():
             bestA = np.argmax(counts)
             probs = [0]*len(counts)
             probs[bestA]=1
-            return probs, v
+            return probs, self.actions
 
         counts = [x**(1./temp) for x in counts]
         counts_sum = float(sum(counts))
         probs = [x/counts_sum for x in counts]
         probs = torch.tensor(probs)
         probs = probs.view(-1, 3)
-        return probs, v
+        return probs, self.actions

@@ -24,7 +24,8 @@ from .util import incremental_mean, convert_from_np_to_tensor, Transition
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
-                discount_factor=0.95, number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform'):
+                discount_factor=0.95, number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
+                cpuct=0.5, num_simulations):
         # device
         self.device = device
         # Toric code
@@ -59,6 +60,7 @@ class RL():
         # hyperparameters RL
         self.discount_factor = discount_factor
         self.number_of_actions = number_of_actions
+        self.tree_args = {'cpuct': cpuct, 'num_simulations':num_simulations, 'grid_shift': self.grid_shift}
 
 
     def save_network(self, PATH):
@@ -208,12 +210,19 @@ class RL():
                 steps_counter += 1
                 iteration += 1
                 # select action using epsilon greedy policy
-                action = self.select_action(number_of_actions=self.number_of_actions,
-                                            epsilon=epsilon, 
-                                            grid_shift=self.grid_shift)
-                # action = MCTS(self.toric)
-                self.toric.step(action)
-                reward = self.get_reward()
+                # action = self.select_action(number_of_actions=self.number_of_actions,
+                #                            epsilon=epsilon, 
+                #                            grid_shift=self.grid_shift)
+
+                self.target_net.eval()
+
+                mcts = MCTS(deepcopy(self.toric), self.target_net, self.device, self.args)
+                pi = mcts.get_probs()
+
+                #p, v = self.policy_net.forward()
+                
+                # self.toric.step(action)
+                # reward = self.get_reward()
                 # generate memory entry
                 perspective, action_memory, reward, next_perspective, terminal = self.toric.generate_memory_entry(
                     action, reward, self.grid_shift)    
@@ -230,8 +239,8 @@ class RL():
                 if update_counter % target_update == 0:
                     self.target_net = deepcopy(self.policy_net)
                 # update epsilon
-                if (update_counter % epsilon_update == 0):
-                    epsilon = np.round(np.maximum(epsilon - epsilon_decay, epsilon_end), 3)
+                # if (update_counter % epsilon_update == 0):
+                #     epsilon = np.round(np.maximum(epsilon - epsilon_decay, epsilon_end), 3)
                 # set next_state to new state and update terminal state
                 self.toric.current_state = self.toric.next_state
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
@@ -249,36 +258,36 @@ class RL():
         return reward
 
 
-    def select_action(self, number_of_actions=int, epsilon=float, grid_shift=int):
-        # set network in evluation mode 
-        self.policy_net.eval()
-        # generate perspectives 
-        perspectives = self.toric.generate_perspective(grid_shift, self.toric.current_state)
-        number_of_perspectives = len(perspectives)
-        # preprocess batch of perspectives and actions 
-        perspectives = Perspective(*zip(*perspectives))
-        batch_perspectives = np.array(perspectives.perspective)
-        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-        batch_perspectives = batch_perspectives.to(self.device)
-        batch_position_actions = perspectives.position
-        #choose action using epsilon greedy approach
-        rand = random.random()
-        if(1 - epsilon > rand):
-            # select greedy action 
-            with torch.no_grad():        
-                policy_net_output = self.policy_net(batch_perspectives)
-                q_values_table = np.array(policy_net_output.cpu())
-                row, col = np.where(q_values_table == np.max(q_values_table))
-                perspective = row[0]
-                max_q_action = col[0] + 1
-                step = Action(batch_position_actions[perspective], max_q_action)
-        # select random action
-        else:
-            random_perspective = random.randint(0, number_of_perspectives-1)
-            random_action = random.randint(1, number_of_actions)
-            step = Action(batch_position_actions[random_perspective], random_action)  
+    # def select_action(self, number_of_actions=int, epsilon=float, grid_shift=int):
+    #     # set network in evluation mode 
+    #     self.policy_net.eval()
+    #     # generate perspectives 
+    #     perspectives = self.toric.generate_perspective(grid_shift, self.toric.current_state)
+    #     number_of_perspectives = len(perspectives)
+    #     # preprocess batch of perspectives and actions 
+    #     perspectives = Perspective(*zip(*perspectives))
+    #     batch_perspectives = np.array(perspectives.perspective)
+    #     batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+    #     batch_perspectives = batch_perspectives.to(self.device)
+    #     batch_position_actions = perspectives.position
+    #     #choose action using epsilon greedy approach
+    #     rand = random.random()
+    #     if(1 - epsilon > rand):
+    #         # select greedy action 
+    #         with torch.no_grad():        
+    #             policy_net_output = self.policy_net(batch_perspectives)
+    #             q_values_table = np.array(policy_net_output.cpu())
+    #             row, col = np.where(q_values_table == np.max(q_values_table))
+    #             perspective = row[0]
+    #             max_q_action = col[0] + 1
+    #             step = Action(batch_position_actions[perspective], max_q_action)
+    #     # select random action
+    #     else:
+    #         random_perspective = random.randint(0, number_of_perspectives-1)
+    #         random_action = random.randint(1, number_of_actions)
+    #         step = Action(batch_position_actions[random_perspective], random_action)  
 
-        return step
+    #     return step
 
 
     def select_action_prediction(self, number_of_actions=int, epsilon=float, grid_shift=int, prev_action=float):
