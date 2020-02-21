@@ -13,6 +13,7 @@ class Toric_code():
         self.qubit_matrix = np.zeros((2, self.system_size, self.system_size), dtype=int)
         self.current_state = np.stack((self.vertex_matrix, self.plaquette_matrix,), axis=0)
         self.next_state = np.stack((self.vertex_matrix, self.plaquette_matrix), axis=0)
+        self.last_state = np.stack((self.vertex_matrix, self.plaquette_matrix), axis=0)
         self.ground_state = True    # True: only trivial loops, 
                                     # False: non trivial loop 
         self.rule_table = np.array(([[0,1,2,3],[1,0,3,2],[2,3,0,1],[3,2,1,0]]), dtype=int)  # Identity = 0
@@ -47,7 +48,7 @@ class Toric_code():
         row = action.position[1]
         col = action.position[2]
         add_operator = action.action
-        
+
         old_operator = self.qubit_matrix[qubit_matrix, row, col]
         new_operator = self.rule_table[int(old_operator), int(add_operator)]
         self.qubit_matrix[qubit_matrix, row, col] = new_operator        

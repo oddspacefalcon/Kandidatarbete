@@ -22,6 +22,7 @@ class MCTS():
         self.device = device # 'cpu'
         self.actions = []
         self.current_level = 0
+        self.last_move = None
 
     def search(self, state):
         # np.arrays är unhashable, behöver string
@@ -29,7 +30,8 @@ class MCTS():
 
         if np.all(state.current_state == 0):
             # if terminal state
-            return 1 # terminal <=> vunnit
+            return 100 # ? Davids rewardsystem
+            #return 1 # terminal <=> vunnit
 
         perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state) # genererar väl inte olika olika ggr???
         number_of_perspectives = len(perspectives) - 1
@@ -43,15 +45,16 @@ class MCTS():
             # leaf node => expand
             self.Ps[s] = self.model.forward(batch_perspectives)
 
-            # defects_state = np.sum(self.perspective)
-            # defects_next_state = np.sum(self.toric.next_state)
-            # v = defects_state - defects_next_state
-
             self.Ns[s] = 0
 
-            # tills resnet är fixad
+            # tills resnet eller annat rewardsystem är fixat
             v = 0
-            return v
+            #return v
+            
+            #Alt: Davids system, straffar introduktion av nya errors, når snabbare terminal:
+            E_t = np.sum(state.last_state)
+            E_t1 = np.sum(state.current_state)
+            return E_t - E_t1
 
         cur_best = -float('inf')
         best_act = -1
@@ -73,13 +76,15 @@ class MCTS():
                         math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
                 else:
                     u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
-                
-                if u > cur_best:
+                                
+                if u > cur_best and a != self.last_move:
                     cur_best = u
                     best_act = a
 
+        self.last_move = best_act
         a = best_act
         state.step(a)
+        state.last_state = state.current_state
         state.current_state = state.next_state
 
         v = self.search(copy.deepcopy(state))
