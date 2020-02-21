@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from random import uniform, randint
 from collections import namedtuple
-from util import Action, Perspective
+from .util import Action, Perspective
 
 
 class Toric_code():
@@ -218,7 +218,8 @@ class Toric_code():
 
     #ta inn self.current_state som parameter i state parametern för att rita
     #titel är titeln bilden får
-    def plot_toric_code(self, state, title):
+    def plot_toric_code(self, title):
+        state = self.current_state
         x_error_qubits1 = np.where(self.qubit_matrix[0,:,:] == 1)
         y_error_qubits1 = np.where(self.qubit_matrix[0,:,:] == 2)
         z_error_qubits1 = np.where(self.qubit_matrix[0,:,:] == 3)
@@ -283,6 +284,8 @@ class Toric_code():
         
         #plt.title(title)
         plt.axis('equal')
-        plt.savefig('../plots/graph_'+str(title)+'.png')
+        plt.savefig(str(title)+'.png')
         plt.close()
+    
+
         
