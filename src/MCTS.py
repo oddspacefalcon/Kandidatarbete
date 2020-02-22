@@ -9,11 +9,11 @@ EPS = 1e-8
 
 class MCTS():
     """
-    Ett objekt representerar ett MCTS-träd
+    Represents a MCTS tree
     """
 
     def __init__(self, toric_code, model, device, args):
-        self.toric_code = toric_code # toric_model-objekt
+        self.toric_code = toric_code # toric_model object
         self.model = model  # resnet
         self.args = args    # c_puct, num_simulations (antalet noder), grid_shift 
         self.Qsa = {}       # stores Q values for s,a (as defined in the paper)
@@ -23,13 +23,13 @@ class MCTS():
         self.device = device # 'cpu'
         self.actions = []
         self.current_level = 0
-        self.last_move = None
+        self.loop_check = set() # set that stores state action pairs
 
     def search(self, state):
-        # np.arrays är unhashable, behöver string
+        # np.arrays unhashable, needs string
         s = np.array_str(state.current_state)
 
-        perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state) # genererar väl inte olika olika ggr???
+        perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
         number_of_perspectives = len(perspectives) - 1
         perspectives = Perspective(*zip(*perspectives))
         batch_perspectives = np.array(perspectives.perspective)
@@ -39,23 +39,13 @@ class MCTS():
 
         if np.all(state.current_state == 0):
             # if terminal state
-            # Davids rewardsystem / number_of_perspectives. Ett försök att få samma skala i UCB som alphago. Tål att tänkas mer på
-            return 100 / number_of_perspectives
-            #return 1 # terminal <=> vunnit
+            return 1 # terminal <=> vunnit
 
         if s not in self.Ps:
             # leaf node => expand
-            self.Ps[s] = self.model.forward(batch_perspectives)
-
+            self.Ps[s], v = self.model.forward(batch_perspectives)
             self.Ns[s] = 0
-
-            #return random.random()
-            
-            E_t = np.sum(state.last_state)
-            E_t1 = np.sum(state.current_state)
-            # Davids rewardsystem / number_of_perspectives. Ett försök att få samma skala i UCB som alphago. Tål att tänkas mer på
-            #print((E_t - E_t1) / number_of_perspectives)
-            return (E_t - E_t1) / number_of_perspectives
+            return v
 
         cur_best = -float('inf')
         best_act = -1
@@ -77,15 +67,15 @@ class MCTS():
                         math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
                 else:
                     u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
-                                
-                if u > cur_best and a != self.last_move:
+                # loop_check to make sure the same bits are not flipped back and forth, creating an infinite recursion loop
+                if u > cur_best and (s,a) not in self.loop_check:
                     cur_best = u
                     best_act = a
 
-        self.last_move = best_act
+        self.loop_check.add((s,best_act))
+
         a = best_act
         state.step(a)
-        state.last_state = state.current_state
         state.current_state = state.next_state
 
         v = self.search(copy.deepcopy(state))
@@ -105,8 +95,11 @@ class MCTS():
         s = np.array_str(self.toric_code.current_state)
 
         for i in range(self.args['num_simulations']):
-             # om inte kopia så sparas alla operationer man gör på toric koden mellan varje iteration
+             # if not copied the operations on the toric code would be saved over every tree
             self.search(copy.deepcopy(self.toric_code))
+             # clear loop_check so the same path can be taken in new tree
+            self.loop_check.clear()
+
         
         counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in self.actions]
 

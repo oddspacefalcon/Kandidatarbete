@@ -3,9 +3,7 @@ from ResNet import ResNet18
 from src.MCTS import MCTS
 from src.util import Perspective, Action
 
-
-
-for i in range(10):
+for i in range(100):
     device = 'cpu'
     system_size = 7
     toric_code = Toric_code(system_size)
@@ -19,11 +17,3 @@ for i in range(10):
     print('antal perspektiv:', len(pi))
     print('pi:', pi)
     print('----------------------------------')
-
-
-# a1 = Action((1, 2, 3), 1)
-# a2 = Action((1, 2, 3), 1)
-
-# d1 = {a1: 1}
-# print(a2 in d1)
-# => True
