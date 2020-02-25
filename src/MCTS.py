@@ -30,7 +30,7 @@ class MCTS():
         s = np.array_str(state.current_state)
 
         perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
-        number_of_perspectives = len(perspectives) - 1
+        number_of_perspectives = len(perspectives)
         perspectives = Perspective(*zip(*perspectives))
         batch_perspectives = np.array(perspectives.perspective)
         batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
@@ -90,7 +90,7 @@ class MCTS():
         self.Ns[s] += 1
         return v
 
-    def get_probs_actions(self, temp=1):
+    def get_probs_action(self, temp=1):
 
         s = np.array_str(self.toric_code.current_state)
 
@@ -100,18 +100,19 @@ class MCTS():
              # clear loop_check so the same path can be taken in new tree
             self.loop_check.clear()
 
-        
         counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in self.actions]
 
         if temp==0:
             bestA = np.argmax(counts)
             probs = [0]*len(counts)
             probs[bestA]=1
-            return probs, self.actions
+            return probs, self.actions[bestA]
 
         counts = [x**(1./temp) for x in counts]
         counts_sum = float(sum(counts))
         probs = [x/counts_sum for x in counts]
         probs = torch.tensor(probs)
+        # sample an action according to probabilities probs
+        action = torch.multinomial(probs, 1)
         probs = probs.view(-1, 3)
-        return probs, self.actions
+        return probs, self.actions[action]

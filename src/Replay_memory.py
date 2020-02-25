@@ -120,7 +120,7 @@ class Replay_memory_prioritized(object):
         
         self.priority_update(indices, priorities) # Revert priorities
         #print(weights)
-        weights = [ i/max(weights) for i in weights] # Normalize for stability
+        weights = [i/max(weights) for i in weights] # Normalize for stability
         
         return out, weights, indices
 

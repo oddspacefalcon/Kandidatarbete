@@ -31,17 +31,11 @@ class Toric_code():
             qubits[no_error] = 1
             pauli_error = np.random.randint(3, size=(self.system_size, self.system_size)) + 1
             self.qubit_matrix[i,:,:] = np.multiply(qubits, pauli_error)
+            # make sure we have atleast one error
+            rand_zero = np.where(self.qubit_matrix == 0)
+            self.qubit_matrix[rand_zero[0]][rand_zero[1]] = 1
         self.syndrom('state')
         
-    def generate_n_random_errors(self, n):
-        errors = np.random.randint(3, size = n) + 1
-        qubit_matrix_error = np.zeros(2*self.system_size**2)
-        qubit_matrix_error[:n] = errors
-        np.random.shuffle(qubit_matrix_error)
-        self.qubit_matrix[:,:,:] = qubit_matrix_error.reshape(2, self.system_size, self.system_size)
-        self.syndrom('state')
-
-
     def step(self, action):
         # uses as input np.array of form (qubit_matrix=int, row=int, col=int, add_operator=int)
         qubit_matrix = action.position[0]

@@ -47,6 +47,9 @@ class Sum_tree(object):
             return self.data[index-(2**(self.tree_level-1)-1)], self.tree[index], index-(2**(self.tree_level-1)-1)
 
         left = self.tree[2*index+1]
+        # print(left)
+        # print('------')
+        # print(value)
 
         if value <= left:
             return self._find(value,2*index+1)
@@ -68,3 +71,5 @@ if __name__ == '__main__':
         s.add(2**i, i)
     s.print_tree()
     print(s.find(0.5))
+
+    print(s.tree_level)

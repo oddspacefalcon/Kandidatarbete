@@ -13,7 +13,6 @@ Perspective = namedtuple('Perspective', ['perspective', 'position'])
 Transition = namedtuple('Transition',
                         ['state', 'action', 'reward', 'next_state', 'terminal'])
 
-
 def conv_to_fully_connected(input_size, filter_size, padding, stride):
     return (input_size - filter_size + 2 * padding)/ stride + 1
 
