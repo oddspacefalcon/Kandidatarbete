@@ -7,7 +7,7 @@ Reference:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
+#import numpy as np
 #from torchsummary import summary
 
 
@@ -95,13 +95,15 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
+
+        p=F.softmax(out[0,0:3]) #normalization
         
         v = torch.tanh(out[0,3]) 
-        p=F.softmax(out[0,0:3]) #normalization
+        
         
         
 
-        return p,v  
+        return p,v  #ha ett ouput istället? använd torch.cat to concatenate
         
 
 
@@ -123,7 +125,7 @@ def ResNet152():
 def test():
     net = ResNet18()
     #summary(net, (2, 5, 5))
-    y = net(torch.randn(1,2,5,5))
+    y = net(torch.randn(1,2,8,8))
     print(y.size())
     
 
