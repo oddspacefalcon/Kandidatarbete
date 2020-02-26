@@ -95,14 +95,13 @@ class ResNet(nn.Module):
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
         out = self.linear(out)
-        last = F.tanh(out[3]) # Tillägg för v
+        
+        v = torch.tanh(out[0,3]) 
+        p=F.softmax(out[0,0:3]) #normalization
+        
+        
 
-        out=out.numpy()
-        sum1=np.sum(out[0:3])    
-        out=out[0:3]/sum1       #normalization (använd softmax istället?).
-        out=np.append(out, last)
-
-        return out   #out[3]=v
+        return p,v  
         
 
 
