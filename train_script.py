@@ -43,7 +43,7 @@ rl = RL(Network=NETWORK,
         max_nbr_actions_per_episode=5,
         device=device,
         replay_memory='proportional', 
-        num_mcts_simulations=3)   # proportional  
+        num_mcts_simulations=10)   # proportional  
                                         # uniform
 
 
