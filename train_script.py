@@ -42,9 +42,9 @@ rl = RL(Network=NETWORK,
         discount_factor=0.95,
         max_nbr_actions_per_episode=5,
         device=device,
-        replay_memory='proportional', 
-        num_mcts_simulations=10)   # proportional  
-                                        # uniform
+        replay_memory='proportional',  # proportional or uniform
+        num_mcts_simulations=10,
+        cpuct=50)
 
 
 # generate folder structure 

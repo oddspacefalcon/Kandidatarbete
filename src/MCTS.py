@@ -43,7 +43,10 @@ class MCTS():
 
         if s not in self.Ps:
             # leaf node => expand
+            # får väldigt små sannolikheter pga softmax => Q dominerar i UCB => liten exploration, kompenserar med cpuct = 50.
+            # kanske kan vara bra att sänka cpuct gradvis under träningen sen
             self.Ps[s], v = self.model.forward(batch_perspectives)
+            #self.Ps[s], = random.random()
             self.Ns[s] = 0
             return v
 

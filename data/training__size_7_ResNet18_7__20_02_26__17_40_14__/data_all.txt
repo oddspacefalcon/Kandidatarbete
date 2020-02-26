@@ -1,0 +1,3 @@
+# system_size, network_name, epoch, replay_memory, device, learning_rate, target_update, optimizer, total_training_steps, prediction_list_p_error, number_of_predictions, number_of_failed_syndroms, error_corrected_list, ground_state_list, average_number_of_steps_list, p_error_train
+0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+7,size_7_ResNet18,1,proportional,cpu,0.00025,10,Adam,50,0.1,1,1.0,0.0,0.0,5.0,0.1
