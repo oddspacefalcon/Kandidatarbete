@@ -7,7 +7,7 @@ import torch.nn as nn
 import numpy as np
 from src.util import convert_from_np_to_tensor
 
-for i in range(1):
+for i in range(3):
     device = 'cpu'
     system_size = 7
     toric_code = Toric_code(system_size)
@@ -23,18 +23,6 @@ for i in range(1):
     print('pi:', pi)
     print('action:', action)
     print('----------------------------------')
-
-perspectives = toric_code.generate_perspective(args['grid_shift'], toric_code.current_state)
-number_of_perspectives = len(perspectives) - 1
-perspectives = Perspective(*zip(*perspectives))
-batch_perspectives = np.array(perspectives.perspective)
-batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-batch_perspectives = batch_perspectives.to(device)
-batch_position_actions = perspectives.position
-
-out = model(batch_perspectives)
-print(out)
-
 
 
 # def alpha_loss(pi, z, p, v):

@@ -88,7 +88,7 @@ class RL():
 
 
     def get_loss(self, p_batch, v_batch, pi_batch, z_batch, weights, indices):       
-        loss = (z_batch-v_batch)**2 - torch.mm(pi_batch.T,torch.log(p_batch)) # fixa så p och pi är positiva
+        loss = (z_batch-v_batch)**2 - torch.mm(pi_batch.T,torch.log(p_batch))
         # for prioritized experience replay
         print(loss)
         if self.replay_memory == 'proportional':

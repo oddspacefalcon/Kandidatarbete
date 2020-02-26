@@ -21,7 +21,7 @@ class MCTS():
         self.Ns = {}        # stores #times board s was visited
         self.Ps = {}        # stores initial policy (returned by neural net)
         self.device = device # 'cpu'
-        self.actions = []
+        self.actions = [] # stores root node actions
         self.current_level = 0
         self.loop_check = set() # set that stores state action pairs
 

@@ -35,6 +35,7 @@ class Toric_code():
             rand_zero = np.where(self.qubit_matrix == 0)
             self.qubit_matrix[rand_zero[0]][rand_zero[1]] = 1
         self.syndrom('state')
+
         
     def step(self, action):
         # uses as input np.array of form (qubit_matrix=int, row=int, col=int, add_operator=int)
@@ -48,7 +49,6 @@ class Toric_code():
         self.qubit_matrix[qubit_matrix, row, col] = new_operator        
         self.syndrom('next_state')
     
-
 
     def syndrom(self, state):
         # generate vertex excitations (charge)
