@@ -2,6 +2,7 @@ import numpy as np
 from util import Action, Perspective
 from toric_model import Toric_code
 import math
+import copy
 
 class MCTS():
     def __init__(self, args, nnet, toric_code):
@@ -23,7 +24,7 @@ class MCTS():
         self.root_state = np.copy(self.toric.qubit_matrix)
         self.actions_taken = []
         
-
+        self.index = 0
         self.branches = {} #inte säker på om denna behövs --> använder denna iallafall inte
 
         #Vet ej om vi ska byta ut dessa?
@@ -42,10 +43,9 @@ class MCTS():
         return self.toric.generate_perspective(self.args.gridshift, self.toric.next_state)
     
     def get_actionprob(self, temp=1):
-        print(self.root_state)
         for i in range(self.args.nr_simulations):
             print("nr simulations " + str(i))
-            self.search(np.copy(self.root_state))
+            self.search(copy.deepcopy(self.root_state))
         
         self.toric.qubit_matrix = self.root_state
         s = str(self.root_state)
@@ -54,18 +54,9 @@ class MCTS():
         perspective_pos = Perspective(*zip(*self.get_input_perspectives())).position
 
         #actions = [[X, Y, Z], [X, Y, Z], ... ] --> Varje [X, Y, Z] är dessa opperatorer på ett visst perspektiv
-        actions = [[str(Action(p_pos, x)) for x in range(3)] for p_pos in perspective_pos]
-        print("Selarataor")
-        print(self.root_state)
-        print("dada")
+        actions = [[str(Action(np.array(p_pos), x+1)) for x in range(3)] for p_pos in perspective_pos]
 
-        for act in self.actions_taken:
-            ss, aa = act
-            if(ss!=s):
-                print("HOW?!")
-            print(ss)
-            print(self.Nsa[act])
-        print("dad")
+        
         pi = [[self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in perspective] for perspective in actions]
         
         if temp==0:
@@ -147,28 +138,26 @@ class MCTS():
 
         #positionen blir här en tuple: type(p_pos) = tuple, INTE array!
         #inneffektivt sätt att göra det på som jag har förstått
-        actions = [[Action(p_pos, x) for x in range(3)] for p_pos in perspective_pos]
+        actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspective_pos]
         UpperConfidence = self.UCBpuct(self.Ps[s], actions, s)
 
+        
         #indecies_of_action = delat upp i perspektiv behövs inte
         perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
         best_perspective = array_of_perspectives[perspective_index]
 
-        best_action = Action(best_perspective.position, action_index+1)
+        best_action = Action(np.array(best_perspective.position), action_index+1)
 
         self.toric.current_state = self.toric.next_state
 
         #Göra om så att vi ändast behöver ha perspektiv här...
         a = str(best_action)
-        self.actions_taken.append((s,a))
+        
         
         if (s,a) in self.Nsa:
             self.Nsa[(s,a)] +=1
-            print("adding")
         else:
             self.Nsa[(s,a)] = 1
-            print("is in")
-        print(self.Nsa[(s,a)])
         
         if s in self.Ns:
             self.Ns[s]+=1
@@ -180,11 +169,9 @@ class MCTS():
 
         if (s,a) in self.Qsa:
             self.Qsa[(s,a)] = ((self.Nsa[(s,a)]-1)*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)])
-            print("at it again!")
 
         else:
             self.Qsa[(s,a)] = v
-            print(self.Nsa[(s,a)])
         return v
     
     def expansion(self, curent_qubit_state):
