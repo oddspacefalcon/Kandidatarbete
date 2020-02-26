@@ -12,7 +12,17 @@ class MCTS():
     Represents a MCTS tree
     """
 
-    def __init__(self, toric_code, model, device, args):
+    def __init__(self, model, device, args, toric_code=None, syndrom=None):
+        if(toric_code == None):
+            if(syndrom == None):
+                raise ValueError("Invalid imput: toric_code or syndrom cannot both have a None value")
+            else:
+                self.syndrom = syndrom
+                self.toric_code = None
+        else:
+            self.toric_code = toric_code
+            self.syndrom = self.toric_code.current_state
+
         self.toric_code = toric_code # toric_model object
         self.model = model  # resnet
         self.args = args    # c_puct, num_simulations (antalet noder), grid_shift 
@@ -96,6 +106,7 @@ class MCTS():
 
         for i in range(self.args['num_simulations']):
              # if not copied the operations on the toric code would be saved over every tree
+             #instead add toric_codes syndrom
             self.search(copy.deepcopy(self.toric_code))
              # clear loop_check so the same path can be taken in new tree
             self.loop_check.clear()

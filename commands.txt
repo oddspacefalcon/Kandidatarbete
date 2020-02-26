@@ -1,0 +1,36 @@
+git commands:
+//
+//
+
+from random import random
+
+print('VeryNic3 2')
+
+class Main:
+
+    def __init__(self, name):
+        self.name = name
+
+
+    def random_name_generator():
+        vokaler = ['a', 'e', 'i', 'o', 'u']
+        konsonanter = ['b', 'c', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'v']
+
+        name = ""
+        nr_konsonant =0
+        for i in range(int(random()*6)+3):
+            if(nr_konsonant<2 and random()<0.7):
+                index = int(random()*len(konsonanter))
+                name+=konsonanter[index]
+                nr_konsonant+=1
+            else: 
+                index = int(random()*len(vokaler))
+                name+=vokaler[index]
+                nr_konsonant=0
+
+        return name
+
+
+for i in range(20):
+    print(Main.random_name_generator() + "\n")
+

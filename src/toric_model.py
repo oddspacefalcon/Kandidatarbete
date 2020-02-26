@@ -47,6 +47,12 @@ class Toric_code():
         new_operator = self.rule_table[int(old_operator), int(add_operator)]
         self.qubit_matrix[qubit_matrix, row, col] = new_operator        
         self.syndrom('next_state')
+
+    def step_only_board(action, syndrom, action_matrix):
+        qubit_matrix = action.position[0]
+        row = action.position[1]
+        col = action.position[2]
+        add_operator = action.action
     
 
 
