@@ -7,7 +7,7 @@ import torch.nn as nn
 import numpy as np
 from src.util import convert_from_np_to_tensor
 
-for i in range(3):
+for i in range(1):
     device = 'cpu'
     system_size = 7
     toric_code = Toric_code(system_size)

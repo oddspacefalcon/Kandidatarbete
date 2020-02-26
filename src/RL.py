@@ -87,18 +87,15 @@ class RL():
         optimizer.step()
 
 
-    def get_loss(self, p_batch, v_batch, pi_batch, z_batch, weights, indices):       
-        loss = (z_batch-v_batch)**2 - torch.mm(pi_batch.T,torch.log(p_batch))
+    def get_loss(self, p_batch, v_batch, pi_batch, z_batch, weights, indices):      
+        loss = (z_batch-v_batch)**2 - torch.sum(pi_batch * torch.log(p_batch)) # dim 1 resp 3*3 är ett problem. Vill ha ett tal för varje batch
         # for prioritized experience replay
+
         print(loss)
         if self.replay_memory == 'proportional':
             loss = convert_from_np_to_tensor(np.array(weights)) * loss.cpu()
-            print(convert_from_np_to_tensor(np.array(weights)))
-            print(loss.cpu())
             priorities = loss
             priorities = np.absolute(priorities.detach().numpy())
-            print(priorities)
-            print(indices)
             self.memory.priority_update(indices, priorities)
         return torch.sum(loss)
 
@@ -198,6 +195,7 @@ class RL():
                 batch_position_actions = perspectives.position
 
                 p, v = self.policy_net.forward(batch_perspectives)
+                p = p.flatten()
 
                 mcts = MCTS(deepcopy(self.toric), self.target_net, self.device, self.tree_args)
                 pi, action = mcts.get_probs_action()
@@ -217,13 +215,12 @@ class RL():
             # 1 > andelen korrigerade > -1
             z = torch.tensor(1 if terminal_state == 0 else max((start_errors - end_errors) / start_errors, -1))
 
-            for i in range(len(mcts_transitions)):
+            for transition in mcts_transitions:
                 # save transitions in memory
-                self.memory.save(mcts_transitions[i] + (z,), 10000)  # max priority
+                self.memory.save(transition + (z,), 10000)  # max priority
 
             # experience replay
             if steps_counter > replay_start_size:
-                print('trained')
                 update_counter += 1
                 self.experience_replay(optimizer, batch_size)
 

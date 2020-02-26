@@ -114,5 +114,5 @@ class MCTS():
         probs = torch.tensor(probs)
         # sample an action according to probabilities probs
         action = torch.multinomial(probs, 1)
-        probs = probs.view(-1, 3)
+        # return flat prob matrix
         return probs, self.actions[action]
