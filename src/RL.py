@@ -99,8 +99,8 @@ class RL():
         return torch.sum(loss)
 
 
-    def train(self, training_steps=int, target_update=int, optimizer=str,
-        batch_size=int, replay_start_size=int):
+    def train(self, epochs, training_steps=int, target_update=int, optimizer=str,
+        batch_size=int, replay_start_size=int, cpuct_start=50, cpuct_end=0.5):
         # set network to train mode
         self.policy_net.train()
         # define criterion and optimizer
@@ -112,6 +112,7 @@ class RL():
         steps_counter = 0
         update_counter = 1
         iteration = 0
+        cpuct_decay = (cpuct_start-cpuct_end) / (training_steps*epochs) # denna behöver tänkas igenom/testas
 
         # main loop over training steps 
         while iteration < training_steps:
@@ -146,10 +147,14 @@ class RL():
                 # pga lossfunktionen behöver vektorer
                 p = p.flatten()
 
+                self.tree_args['cpuct'] = max(self.tree_args['cpuct'] - cpuct_decay, cpuct_end)
+
                 mcts = MCTS(deepcopy(self.toric), self.target_net, self.device, self.tree_args)
                 pi, action = mcts.get_probs_action()
 
                 mcts_transitions.append((p, v, pi))
+
+                print(self.tree_args['cpuct'])
 
                 if iteration == 1:
                     start_errors = np.sum(self.toric.current_state)
@@ -256,7 +261,8 @@ class RL():
                     target_update=target_update,
                     optimizer=optimizer,
                     batch_size=batch_size,
-                    replay_start_size=replay_start_size)
+                    replay_start_size=replay_start_size,
+                    epochs=epochs)
             print('training done, epoch: ', i+1)
             # evaluate network
             error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, 

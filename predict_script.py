@@ -26,10 +26,10 @@ system_size = 7
 #   ResNet50
 #   ResNet101
 #   ResNet152
-network = NN_17
+network = ResNet18
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'Size_7_NN_17'
+NETWORK_FILE_NAME = 'Size_7_ResNet18'
 
 num_of_predictions = 1
 
@@ -59,7 +59,6 @@ error_corrected_list, ground_state_list, average_number_of_steps_list, mean_q_li
     num_of_steps=75, 
     PATH=PATH2, 
     prediction_list_p_error=prediction_list_p_error,
-    minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
     plot_one_episode=False)
 
 # runtime of prediction
