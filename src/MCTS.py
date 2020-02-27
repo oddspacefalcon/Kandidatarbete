@@ -15,9 +15,7 @@ class MCTS():
         self.nnet = nnet
         self.args = args
         self.root_state = copy.deepcopy(self.toric)
-        self.actions_taken = []
         self.device = device # 'gpu'
-        self.batch_perspectives_temp = np.zeros(1)
         self.loop_check = set()
         self.current_level = 0 
         self.actions = [] # stores root node actions
@@ -56,17 +54,16 @@ class MCTS():
         counts_sum = float(sum(counts))
         pi = [x/counts_sum for x in counts]
         pi = torch.tensor(pi)
-        # sample an action according to probabilities probs
-        action = torch.multinomial(pi, 1)
+        action = torch.multinomial(pi, 1)        # sample an action according to probabilities probs
         pi = np.array(pi)
 
         return pi, v, self.actions[action]
         
 
     def search(self,state):
+
         print('selection initiated')
         s = str(state.current_state)
-        #print(state.current_state)
 
         #...........................Check if terminal state.............................
 
@@ -144,8 +141,6 @@ class MCTS():
         return v
 
         
-        
-    # At leaf node
     def expansion(self, batch_perspectives, s):
         self.Ps[s], v = self.nnet.forward(batch_perspectives)  # matris med q,värdena för de olika actionen för alla olika perspektiv i en batch
         
@@ -163,25 +158,6 @@ class MCTS():
         
         return self.Ps[s], v
 
-    '''   
-
-
-
-    def UCBpuct(self, probability_matrix, actions, s):
-
-        current_Qsa = np.array([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions])
-        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0 for a in opperator_actions] for opperator_actions in actions])
-        
-        if s not in self.Ns:
-            current_Ns = 0.001
-        else:
-            if self.Ns[s] == 0:
-                current_Ns = 0.001
-            else:
-                current_Ns = self.Ns[s]
-
-        return current_Qsa + self.args.cpuct*probability_matrix.data.numpy()*np.sqrt(current_Ns/(1+current_Nsa))
-    '''
     
     def rollout(self, batch_perspectives, s):
         pass
