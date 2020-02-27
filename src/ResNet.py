@@ -81,8 +81,8 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, num_blocks[1], stride=1)
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=1)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
-        self.linear1 = nn.Linear(512*block.expansion, 3)
-        self.linear2 = nn.Linear(512*block.expansion, 1)
+        self.linear = nn.Linear(512*block.expansion, 3)
+        self.linear_v = nn.Linear(512*block.expansion, 1)
         #self.linear = nn.Linear(512, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
@@ -101,10 +101,9 @@ class ResNet(nn.Module):
         out = self.layer4(out)
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
-        out1 = self.linear1(out)
-        out2 = self.linear2(out)
-
-        return out1, out2
+        out1 = self.linear(out)
+        out2 = self.linear_v(out)
+        return out1, torch.tanh(out2) 
 
 
 def ResNet18():

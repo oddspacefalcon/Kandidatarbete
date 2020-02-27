@@ -1,43 +1,27 @@
-'''
-Jag kan börja med att kommentera koden för att förstå den bättre skjälv
-'''
 # standard libraries
-''' Importar standard bibliotek som jag känner igjenn'''
-import numpy as np 
+import numpy as np
 import random
 import time
 from collections import namedtuple, Counter
 import operator
 import os
-
-    #Känner ej igjenn dessa, men tror det är datastrukturer och sätt att kopiera objekt? 
-from collections import namedtuple, Counter
 from copy import deepcopy
 import heapq
-# pytorch --> Kan jag
+# pytorch
 import torch
 import torch.nn as nn
 import torch.optim as optim
-# import from other files -->OK!
+# import from other files
 from .toric_model import Toric_code
 from .toric_model import Action
 from .toric_model import Perspective
 from .Replay_memory import Replay_memory_uniform, Replay_memory_prioritized
-# import networks --> OK!
+# import networks 
 from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from .util import incremental_mean, convert_from_np_to_tensor, Transition
 
 
-'''
-Huvudprogrammet: RL, skjälva reenforcement learning applicationen.
-Här defineras denna med att först ta in ett nätvärk, nogra parametrar som learning rate discount factor, number of actions?, max pr episode
-device och annat som jag inte helt förstår som
-system_size: hur stor toric coden är
-p_error: hur sannolikt det är för fel (Hur många fel den behöver korrigera)
-replay_memory_capacity: Hur stor memory buffern ska vara
-number_number_of_actons:
-'''
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
                 discount_factor=0.95, number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform'):
@@ -76,29 +60,26 @@ class RL():
         self.discount_factor = discount_factor
         self.number_of_actions = number_of_actions
 
-#Lagrar nätvärket som en fil vid ett speciellt ställe
-#Lagrar policy net efter som denna är den man uppdaterar mest sällan (den mest stabila)
+
     def save_network(self, PATH):
         torch.save(self.policy_net, PATH)
 
-#Laddar upp nätvärket som man tidigare har tränat och sparat (se save_network) 
+
     def load_network(self, PATH):
-        self.policy_net = torch.load(PATH, map_location='cpu')
+        self.policy_net = torch.load(PATH, map_location='cpu') 
         self.target_net = deepcopy(self.policy_net)
         self.policy_net = self.policy_net.to(self.device)
         self.target_net = self.target_net.to(self.device)
 
-    
 
     def experience_replay(self, criterion, optimizer, batch_size):
-        self.policy_net.train() #Sätter de olika till train och evaluations mode!
+        self.policy_net.train()
         self.target_net.eval()
-
-        transitions, weights, indices = self.memory.sample(batch_size, 0.4) # beta parameter
-
-        mini_batch = Transition(*zip(*transitions)) #Fattar inte riktigt vad denna gör
+        # get transitions and unpack them to minibatch
+        transitions, weights, indices = self.memory.sample(batch_size, 0.4) # beta parameter 
+        mini_batch = Transition(*zip(*transitions))
         # unpack action batch
-        batch_actions = Action(*zip(*mini_batch.action)) #omforming för att få inputs som man kan stoppa i nätvärken
+        batch_actions = Action(*zip(*mini_batch.action))
         batch_actions = np.array(batch_actions.action) - 1
         batch_actions = torch.Tensor(batch_actions).long()
         batch_actions = batch_actions.to(self.device)
@@ -111,37 +92,29 @@ class RL():
         batch_reward = convert_from_np_to_tensor(np.array(mini_batch.reward))
         batch_reward = batch_reward.to(self.device)
         # compute policy net output
-        output = self.policy_net(batch_state) #tror denna ger Q-värden för olika stater
-        output = output.gather(1, batch_actions.view(-1, 1)).squeeze(1)  #Tror denna väljer den med högst Q-värde
+        output = self.policy_net(batch_state)
+        output = output.gather(1, batch_actions.view(-1, 1)).squeeze(1)    
         # compute target network output 
         target_output = self.get_target_network_output(batch_next_state, batch_size)
         target_output = target_output.to(self.device)
-        y = batch_reward + (batch_terminal * self.discount_factor * target_output) #Bellman ekvationen
+        y = batch_reward + (batch_terminal * self.discount_factor * target_output)
         # compute loss and update replay memory
-        loss = self.get_loss(criterion, optimizer, y, output, weights, indices) #Backprop med bellman ekvation
+        loss = self.get_loss(criterion, optimizer, y, output, weights, indices)
         # backpropagate loss
         loss.backward()
         optimizer.step()
 
-
-#Definerar loss funktionen: Fattar inte riktigt hur denna fungerar
-#--> värkar som man har lossfunktionen på ett annat ställe (man provar ändast att få nogot som ska likna den förra bättre...)
-#Sedan updaterar man om minnet är uppställt på ett speciellt sätt
 
     def get_loss(self, criterion, optimizer, y, output, weights, indices):
         loss = criterion(y, output)
         optimizer.zero_grad()
         # for prioritized experience replay
         if self.replay_memory == 'proportional':
-            loss = convert_from_np_to_tensor(np.array(weights)) * loss.cpu() #Fattar inte vad denna gör'''
+            loss = convert_from_np_to_tensor(np.array(weights)) * loss.cpu()
             priorities = loss
             priorities = np.absolute(priorities.detach().numpy())
             self.memory.priority_update(indices, priorities)
         return loss.mean()
-
-
-#Fattar inte riktigt denna 
-#Ger en bästa actions, och output för target net? 
 
 
     def get_network_output_next_state(self, batch_next_state=float, batch_size=int, action_index=None):
@@ -151,11 +124,11 @@ class RL():
         batch_network_output = np.zeros(batch_size)
         batch_perspectives = np.zeros(shape=(batch_size, 2, self.system_size, self.system_size))
         batch_actions = np.zeros(batch_size)
-        for i in range(batch_size): #Itererar över items i batachen (states mer specifikt)
-            if (batch_next_state[i].cpu().sum().item() == 0):#om de är noll hela hopen -> man är klar helt enkelt
+        for i in range(batch_size):
+            if (batch_next_state[i].cpu().sum().item() == 0):
                 batch_perspectives[i,:,:,:] = np.zeros(shape=(2, self.system_size, self.system_size))
             else:
-                perspectives = self.toric.generate_perspective(self.grid_shift, batch_next_state[i].cpu()) #genererar alla perspektiv
+                perspectives = self.toric.generate_perspective(self.grid_shift, batch_next_state[i].cpu())
                 perspectives = Perspective(*zip(*perspectives))
                 perspectives = np.array(perspectives.perspective)
                 perspectives = convert_from_np_to_tensor(perspectives)
@@ -163,24 +136,23 @@ class RL():
                 # select greedy action 
                 with torch.no_grad():        
                     net_output = self.target_net(perspectives)
-                    q_values_table = np.array(net_output.cpu()) #Ger Q values som en lista 3 Qvals
-                                                            #för olika opperatorer i en annan lista för alla perspektiv'''
-                    row, col = np.where(q_values_table == np.max(q_values_table)) #Hittar de med max q-värde'''
-                    if action_index[i] == None:                     #Fattar inte vad action index är... --> tror denna är random selection?'''
-                        batch_network_output[i] = q_values_table[row[0], col[0]]   #Tar antingen  absolut bästa action                
+                    q_values_table = np.array(net_output.cpu())
+                    row, col = np.where(q_values_table == np.max(q_values_table))
+                    if action_index[i] == None:
+                        batch_network_output[i] = q_values_table[row[0], col[0]]                            
                     elif action_index[i] != None:
                         action_from_policy_net = int(action_index[i])
-                        batch_network_output[i] = q_values_table[row[0], action_from_policy_net] #Tar annars random action på besta perspektivet...
-                    perspective = perspectives[row[0]] #Hittar det besta perspektivet
-                    perspective = np.array(perspective.cpu()) 
-                    batch_perspectives[i,:,:,:] = perspective #ger alla perspektiv som fungerar best.
-                    batch_actions[i] = col[0] #Ger alla korresponderande actions.
-                    batch_network_output[i] = q_values_table[row[0], col[0]] #Ger sedan besta outputen till denna (Q-värdet):  np arrays hela hopen
+                        batch_network_output[i] = q_values_table[row[0], action_from_policy_net]
+                    perspective = perspectives[row[0]]
+                    perspective = np.array(perspective.cpu())
+                    batch_perspectives[i,:,:,:] = perspective
+                    batch_actions[i] = col[0]
+                    batch_network_output[i] = q_values_table[row[0], col[0]]
         batch_network_output = convert_from_np_to_tensor(batch_network_output)
         batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
         return batch_network_output, batch_perspectives, batch_actions
 
-#Returnerar Q-vardet för target network (den som man tränar så ofta)
+
     def get_target_network_output(self, batch_next_state, batch_size):
         with torch.no_grad():
             action_index = np.full(shape=(batch_size), fill_value=None)
@@ -189,16 +161,12 @@ class RL():
                                                                         action_index=action_index)
         return target_output
 
-#Fattar inte riktigt vad denna gör -> verkar som den gör om en array med states till en stack..
+
     def get_batch_input(self, state_batch):
         batch_input = np.stack(state_batch, axis=0)
         batch_input = convert_from_np_to_tensor(batch_input)
         return batch_input.to(self.device)
 
-
-
-
-#Skjälva huvudelen av programmet: train
 
     def train(self, training_steps=int, target_update=int, epsilon_start=1.0, num_of_epsilon_steps=10, 
         epsilon_end=0.1, reach_final_epsilon=0.5, optimizer=str,
@@ -234,8 +202,6 @@ class RL():
                     self.toric.generate_n_random_errors(minimum_nbr_of_qubit_errors)
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
             # solve one episode
-            #Huvudalgoritmen som David gick igenom
-
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
                 num_of_steps_per_episode += 1
                 num_of_epsilon_steps += 1
@@ -245,20 +211,18 @@ class RL():
                 action = self.select_action(number_of_actions=self.number_of_actions,
                                             epsilon=epsilon, 
                                             grid_shift=self.grid_shift)
+                # action = MCTS(self.toric)
                 self.toric.step(action)
                 reward = self.get_reward()
                 # generate memory entry
                 perspective, action_memory, reward, next_perspective, terminal = self.toric.generate_memory_entry(
                     action, reward, self.grid_shift)    
                 # save transition in memory
-                ''' Intressant, det värkar som att vikterna som lagras är väldigt stora till en början, men när man använder dessa
-                    blir detta räknat ut och man vet vilken prioritet de ska ha '''
                 self.memory.save(Transition(perspective, action_memory, reward, next_perspective, terminal), 10000) # max priority
-
+            
                 # experience replay
                 if steps_counter > replay_start_size:
                     update_counter += 1
-                    #värkar vara här man uppdaterar/ lär ut policy_neten
                     self.experience_replay(criterion,
                                             optimizer,
                                             batch_size)
@@ -272,7 +236,7 @@ class RL():
                 self.toric.current_state = self.toric.next_state
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-#Ger en ändast rewarden från att göra detta flera gånger
+
     def get_reward(self):
         terminal = np.all(self.toric.next_state==0)
         if terminal == True:
@@ -284,7 +248,7 @@ class RL():
 
         return reward
 
-    #väljer action utifrån  epsilon greedy approach
+
     def select_action(self, number_of_actions=int, epsilon=float, grid_shift=int):
         # set network in evluation mode 
         self.policy_net.eval()
@@ -340,10 +304,10 @@ class RL():
             row, col = np.where(q_values_table == np.max(q_values_table))
             perspective = row[0]
             max_q_action = col[0] + 1
-            step = Action(batch_position_actions[perspective], max_q_action)
-            if prev_action == step: #Fattar inte denna, vad är res och vad är heapq, sedan varför ska jag använda denna för att ta ny action'''
-                res = heapq.nlargest(2, q_values_table.flatten()) #Denna hittar den näst största, och så använder man denna istället...
-                row, col = np.where(q_values_table == res[1])#Varför vill man inte göra samma sak igjenn?
+            step = Action(batch_position_actions[perspective], max_q_action) # Action = namedtuple('Action', ['position', 'action'])
+            if prev_action == step:
+                res = heapq.nlargest(2, q_values_table.flatten())
+                row, col = np.where(q_values_table == res[1])
                 perspective = row[0]
                 max_q_action = col[0] + 1
                 step = Action(batch_position_actions[perspective], max_q_action)
@@ -358,10 +322,6 @@ class RL():
         return step, q_value
 
 
-
-#Kollar hur bra nätvärket är på att lösa denna.
-
-#Vet ej vad denna gör: är det att den ändast går igjenom alla steg?'''
     def prediction(self, num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH=None, plot_one_episode=False, 
         show_network=False, show_plot=False, prediction_list_p_error=float, minimum_nbr_of_qubit_errors=0, print_Q_values=False, save_prediction=True):
         # load network for prediction and set eval mode 
@@ -436,14 +396,13 @@ class RL():
             average_number_of_steps_list[i] = np.round(mean_steps_per_p_error, 1)
             mean_q_list[i] = np.round(mean_q_per_p_error, 3)
 
-        return error_corrected_list, ground_state_list, average_number_of_steps_list, mean_q_list, failed_syndroms, ground_state_list, prediction_list_p_error, failure_rate
+        return error_corrected_list, ground_state_list, average_number_of_steps_list, mean_q_list, failed_syndroms, prediction_list_p_error, failure_rate
 
 
     def train_for_n_epochs(self, training_steps=int, epochs=int, num_of_predictions=100, num_of_steps_prediction=50, target_update=100, 
         optimizer=str, save=True, directory_path='network', prediction_list_p_error=[0.1],
         batch_size=32, replay_start_size=32, minimum_nbr_of_qubit_errors=0):
         
-        data_all = []
         data_all = np.zeros((1, 19))
 
         for i in range(epochs):
@@ -455,7 +414,7 @@ class RL():
                     minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors)
             print('training done, epoch: ', i+1)
             # evaluate network
-            error_corrected_list, ground_state_list, average_number_of_steps_list, mean_q_list, failed_syndroms, ground_state_list, prediction_list_p_error, failure_rate = self.prediction(num_of_predictions=num_of_predictions, 
+            error_corrected_list, ground_state_list, average_number_of_steps_list, mean_q_list, failed_syndroms, prediction_list_p_error, failure_rate = self.prediction(num_of_predictions=num_of_predictions, 
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error, 
                                                                                                                                                                         minimum_nbr_of_qubit_errors=int(self.system_size/2)+1,
                                                                                                                                                                         save_prediction=True,

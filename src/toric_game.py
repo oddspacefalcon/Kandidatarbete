@@ -62,7 +62,7 @@ def syndrom_tostring():
 state = toric.current_state
 toric.plot_toric_code('hej')
 
-'''
+
 # os.system('cls')
 while(toric.terminal_state(toric.current_state == 1)):
     os.system('cls')
@@ -87,4 +87,3 @@ if(toric.ground_state == True):
     print('You win!')
 else:
     print("You Lose!")
-'''
