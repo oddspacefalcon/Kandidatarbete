@@ -14,7 +14,6 @@ class MCTS():
         self.toric = toric_code
         self.nnet = nnet
         self.args = args
-        self.root_state = copy.deepcopy(self.toric)
         self.device = device # 'gpu'
         self.loop_check = set()
         self.current_level = 0 
@@ -24,10 +23,9 @@ class MCTS():
         self.Nsa = {}       # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
         self.Ps = {}        # stores initial policy (returned by neural net)
-        self.Es = {}        # stores game.getGameEnded ended for board s
 
 
-    def get_policy(self, temp=0):
+    def get_policy(self, temp=1):
         
         #...........................get v from search........................
 
@@ -36,8 +34,6 @@ class MCTS():
             v = self.search(copy.deepcopy(self.toric))
             print('________________________') 
             self.loop_check.clear()
-            if i > 20:
-                temp = 1
     
         #..............................Policy pi[a|s] .............................
 
@@ -48,7 +44,7 @@ class MCTS():
             bestA = np.argmax(counts)
             pi = [0]*len(counts)
             pi[bestA]=1
-            return pi, self.actions[bestA]
+            return pi, v, self.actions[bestA]
 
         counts = [x**(1./temp) for x in counts]
         counts_sum = float(sum(counts))
@@ -68,8 +64,15 @@ class MCTS():
         #...........................Check if terminal state.............................
 
         if np.all(state.current_state == 0):
-            # if terminal state
-            return 1 # terminal <=> vunnit
+            if state.eval_ground_state():
+                    #Trivial loop --> gamestate won!
+                    print('We Won! :)')
+                    return 1
+            else:
+                #non trivial loop --> game lost!
+                print('Lost :(')
+                return -1
+             
 
         #..................Get perspectives and batch for network......................
 

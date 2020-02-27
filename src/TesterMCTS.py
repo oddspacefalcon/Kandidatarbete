@@ -11,7 +11,7 @@ toric = Toric_code(system_size)
 toric.generate_random_error(0.1)
 Arguments = namedtuple('Arguments', ['nr_simulations', 'gridshift', 'cpuct'])
 
-args = Arguments(100, system_size//2, 50)
+args = Arguments(50, system_size//2, 50)
 device = 'cpu'
 nnet = ResNet18()
 
