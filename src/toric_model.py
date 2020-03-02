@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from random import uniform, randint
 from collections import namedtuple
-from util import Action, Perspective
+from .util import Action, Perspective
 
 
 class Toric_code():
@@ -35,6 +35,14 @@ class Toric_code():
             rand_zero = np.where(self.qubit_matrix == 0)
             self.qubit_matrix[rand_zero[0]][rand_zero[1]] = 1
         self.syndrom('state')
+    
+    def generate_n_random_errors(self, n):
+        errors = np.random.randint(3, size = n) + 1
+        qubit_matrix_error = np.zeros(2*self.system_size**2)
+        qubit_matrix_error[:n] = errors
+        np.random.shuffle(qubit_matrix_error)
+        self.qubit_matrix[:,:,:] = qubit_matrix_error.reshape(2, self.system_size, self.system_size)
+        self.syndrom('state')
         
     def step(self, action):
         # uses as input np.array of form (qubit_matrix=int, row=int, col=int, add_operator=int)
@@ -47,14 +55,11 @@ class Toric_code():
         new_operator = self.rule_table[int(old_operator), int(add_operator)]
         self.qubit_matrix[qubit_matrix, row, col] = new_operator        
         self.syndrom('next_state')
-
-    def step_only_board(action, syndrom, action_matrix):
-        qubit_matrix = action.position[0]
-        row = action.position[1]
-        col = action.position[2]
-        add_operator = action.action
-    
-
+        
+    def apply_opperators(self, opperator_matrix):
+        a = self.qubit_matrix
+        b = opperator_matrix
+        self.qubit_matrix = np.array([[[[rule_table[ a[q][row][col]][b[q][row][col]] ] for row in range(size)] for col in range(size)] for q in range(2)])
 
     def syndrom(self, state):
         # generate vertex excitations (charge)

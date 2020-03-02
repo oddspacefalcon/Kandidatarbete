@@ -34,9 +34,16 @@ def generate_con_matrix(x_errors, z_errors, system_size):
     
 
 
-def calc_path(pos1, pos2, size):
+def calc_path(pos1, pos2, size, opperation):
     x1, y1 = pos1
     x2, y2 = pos2
     x_length = abs(x2-x1) if (abs(x2-x1) < size-abs(x2-x1)) else size-abs(x2-x1)
     y_length = abs(y2-y1) if (abs(y2-y1) < size-abs(y2-y1)) else size-abs(y2-y1)
+    path = np.zeros((size,size), dtype=int)
+    for i in range(x_length+y_length):
+        #ej korrekt nu...
+        if(i < x_lentgth):
+            path[x1+i][y1] = opperation+1
+        else:
+            path[x1+x_length-1][y1+i-x_length]
     return x_length+y_length

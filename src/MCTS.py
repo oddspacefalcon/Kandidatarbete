@@ -35,11 +35,11 @@ class MCTS():
         self.current_level = 0
         self.loop_check = set() # set that stores state action pairs
 
-    def search(self, state):
+    def search(self, state, actions_taken):
         # np.arrays unhashable, needs string
-        s = np.array_str(state.current_state)
+        s = np.array_str(state)
 
-        perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
+        perspectives = generate_perspective(self.args['grid_shift'], state)
         number_of_perspectives = len(perspectives)
         perspectives = Perspective(*zip(*perspectives))
         batch_perspectives = np.array(perspectives.perspective)
@@ -47,7 +47,7 @@ class MCTS():
         batch_perspectives = batch_perspectives.to(self.device)
         batch_position_actions = perspectives.position
 
-        if np.all(state.current_state == 0):
+        if np.all(state == 0):
             # if terminal state
             return 1 # terminal <=> vunnit
 
@@ -85,8 +85,7 @@ class MCTS():
         self.loop_check.add((s,best_act))
 
         a = best_act
-        state.step(a)
-        state.current_state = state.next_state
+        step(a, state, actions_taken)
 
         v = self.search(copy.deepcopy(state))
 
@@ -127,3 +126,67 @@ class MCTS():
         action = torch.multinomial(probs, 1)
         probs = probs.view(-1, 3)
         return probs, self.actions[action]
+
+    def generate_perspective(self, grid_shift, state):
+        def mod(index, shift):
+            index = (index + shift) % self.system_size 
+            return index
+        perspectives = []
+        vertex_matrix = state[0,:,:]
+        plaquette_matrix = state[1,:,:]
+        # qubit matrix 0
+        for i in range(self.system_size):
+            for j in range(self.system_size):
+                if vertex_matrix[i, j] == 1 or vertex_matrix[mod(i, 1), j] == 1 or \
+                plaquette_matrix[i, j] == 1 or plaquette_matrix[i, mod(j, -1)] == 1:
+                    new_state = np.roll(state, grid_shift-i, axis=1)
+                    new_state = np.roll(new_state, grid_shift-j, axis=2)
+                    temp = Perspective(new_state, (0,i,j))
+                    perspectives.append(temp)
+        # qubit matrix 1
+        for i in range(self.system_size):
+            for j in range(self.system_size):
+                if vertex_matrix[i,j] == 1 or vertex_matrix[i, mod(j, 1)] == 1 or \
+                plaquette_matrix[i,j] == 1 or plaquette_matrix[mod(i, -1), j] == 1:
+                    new_state = np.roll(state, grid_shift-i, axis=1)
+                    new_state = np.roll(new_state, grid_shift-j, axis=2)
+                    new_state = self.rotate_state(new_state) # rotate perspective clock wise
+                    temp = Perspective(new_state, (1,i,j))
+                    perspectives.append(temp)
+        
+        return perspectives
+
+
+    def step(self, action, syndrom, action_matrix):
+        qubit_matrix = action.position[0]
+        row = action.position[1]
+        col = action.position[2]
+        add_operator = action.action
+        system_size = syndrom.shape()[1]
+        rule_table = np.array(([[0,1,2,3],[1,0,3,2],[2,3,0,1],[3,2,1,0]]), dtype=int)
+
+        #Förändrar action matrisen
+        current_state = action_matrix[qubit_matrix][row][col]
+        action_matrix[qubit_matrix][row][col] = rule_table[action][current_state]
+
+        #if x or y
+        if add_opperator == 1 or add_operator ==2:
+            if qubit_matrix == 0:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][row][(col-1)%system_size] = (syndrom[0][row][(col-1)%system_size]+1)%2
+            else if qubit_matrix == 1:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][(row+1)%system_size][col] = (syndrom[0][(row+1)%system_size][col]+1)%2
+        #if z or y
+        if add_opperator == 3 or add_operator ==2:
+            if qubit_matrix == 0:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][(row-1)%system_size][col] = (syndrom[0][(row-1)%system_size][col]+1)%2
+            else if qubit_matrix == 1:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][row][(col+1)%system_size] = (syndrom[0][row][(col+1)%system_size]+1)%2
+    
+    def mult_actions(self, action_matrix1, action_matrix2):
+        rule_table = np.array(([[0,1,2,3], [1,0,3,2], [2,3,0,1], [3,2,1,0]]), dtype=int)
+
+        return [[[rule_table[qu1][qu2] for qu1, qu2 in zip(row1, row2)] for row1, row2 in zip(qu_mat1, qu_mat2)] for qu_mat1, qu_mat2 in zip(action_matrix1, action_matrix2)]

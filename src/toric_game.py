@@ -71,6 +71,7 @@ while(toric.terminal_state(toric.current_state==1)):
     
     myAction = Action(pos, action)
     toric.step(myAction)
+    toric.syndrom("state")
 
 toric.eval_ground_state()
 if(toric.ground_state==True):
