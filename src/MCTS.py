@@ -64,28 +64,50 @@ class MCTS():
 
         self.current_level += 1
 
-        for perspective in range(number_of_perspectives):
-            for action in range(1, 4):
+        # for perspective in range(number_of_perspectives):
+        #     for action in range(1, 4):
 
-                a = Action(batch_position_actions[perspective], action)
+        #         a = Action(batch_position_actions[perspective], action)
 
-                if self.current_level == 1:
-                    self.actions.append(a)
+        #         if self.current_level == 1:
+        #             self.actions.append(a)
 
-                if (s,a) in self.Qsa:
-                    u = self.Qsa[(s,a)] + self.args['cpuct']*self.Ps[s][perspective][action-1]*\
-                        math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
-                else:
-                    u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
-                # loop_check to make sure the same bits are not flipped back and forth, creating an infinite recursion loop
-                if u > cur_best and (s,a) not in self.loop_check:
-                    cur_best = u
-                    best_act = a
+        #         if (s,a) in self.Qsa:
+        #             u = self.Qsa[(s,a)] + self.args['cpuct']*self.Ps[s][perspective][action-1]*\
+        #                 math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
+        #         else:
+        #             u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
+        #         loop_check to make sure the same bits are not flipped back and forth, creating an infinite recursion loop
+        #         if u > cur_best and (s,a) not in self.loop_check:
+        #             cur_best = u
+        #             best_act = a
 
-        self.loop_check.add((s,best_act))
+        # self.loop_check.add((s,best_act))
 
-        a = best_act
-        step(a, state, actions_taken)
+        # a = best_act
+
+
+        ##Nya sättet att 
+        actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspective_pos]
+        UpperConfidence = self.UCBpuct(self.Ps[s], actions, s)
+
+        
+        #indecies_of_action = delat upp i perspektiv behövs inte
+        perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
+        best_perspective = array_of_perspectives[perspective_index]
+
+        action = Action(np.array(best_perspective.position), action_index+1)
+
+        a = str(best_action)
+
+        step(action, state, actions_taken)
+        self.toric.current_state = self.toric.next_state
+
+        #Göra om så att vi ändast behöver ha perspektiv här...
+
+
+
+        
 
         v = self.search(copy.deepcopy(state))
 
