@@ -14,9 +14,10 @@ for i in range(1):
     toric_code.generate_random_error(0.1)
 
     model = ResNet18()
-    args = {'cpuct': 0.5, 'num_simulations':30, 'grid_shift': system_size//2}
+    args = {'cpuct': 0.5, 'num_simulations':4, 'grid_shift': system_size//2}
 
-    mcts = MCTS(toric_code, model, device, args)
+    mcts = MCTS(model, device, args, toric_code=toric_code)
+    model.eval()
     pi, action = mcts.get_probs_action()
 
     print('antal perspektiv:', len(pi))
