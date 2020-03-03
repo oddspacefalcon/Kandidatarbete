@@ -1,6 +1,6 @@
 import numpy as np
-from util import Action, Perspective, convert_from_np_to_tensor
-from toric_model import Toric_code
+from .util import Action, Perspective, convert_from_np_to_tensor
+from .toric_model import Toric_code
 import math
 import torch
 import copy
@@ -23,6 +23,7 @@ class MCTS():
         self.Nsa = {}       # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
         self.Ps = {}        # stores initial policy (returned by neural net)
+        self.reward = 0
 
 
     def get_policy(self, temp=1):
@@ -57,22 +58,19 @@ class MCTS():
         
 
     def search(self,state):
-
+        #with torch.no_grad():
         print('selection initiated')
         s = str(state.current_state)
 
         #...........................Check if terminal state.............................
 
         if np.all(state.current_state == 0):
-            if state.eval_ground_state():
+            if state.eval_ground_state(): #ska det vara self.toric.eval_ground_state(): här istället?
                     #Trivial loop --> gamestate won!
-                    print('We Won! :)')
                     return 1
             else:
                 #non trivial loop --> game lost!
-                print('Lost :(')
                 return -1
-             
 
         #..................Get perspectives and batch for network......................
 
@@ -87,11 +85,7 @@ class MCTS():
         # ............................If leaf node......................................
 
         if s not in self.Ps: 
-
             self.Ps[s], v = self.expansion(batch_perspectives, s)
-            print('Leaf node, asking network: shape(Ps)=', self.Ps[s].data.numpy().shape, '  v=', v)
-            print(batch_perspectives.data.numpy().shape)
-
             return v
 
         # ..........................Get best action...................................
@@ -121,40 +115,50 @@ class MCTS():
 
         self.loop_check.add((s,best_action))
         a = best_action
-        print(best_action)
         state.step(a)
+        self.reward = self.get_reward(state)
         state.current_state = state.next_state
 
+        print('-------')
         v = self.search(copy.deepcopy(state))
-      
+        print('## Time for backprop ##')
+
         # ............................BACKPROPAGATION................................
-
+        
         if (s,a) in self.Qsa:
-            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)]+1)
+            self.Qsa[(s,a)] = (self.Qsa[(s,a)] +self.reward + self.args.disscount_factor*v)/(self.Nsa[(s,a)]+1)
             self.Nsa[(s,a)] += 1
-            print('Adding: Nsa = ', self.Nsa[(s,a)], 'Qsa = ', self.Qsa[(s,a)])
-
+            print('Adding!')
         else:
             self.Qsa[(s,a)] = v
             self.Nsa[(s,a)] = 1
-            print('First Time: Nsa = ', self.Nsa[(s,a)], 'Qsa = ', self.Qsa[(s,a)])
+            print('First Time!')
 
         self.Ns[s] += 1
-
         return v
+    
+    # Reward
+    def get_reward(self, state):
+        terminal = np.all(state.next_state==0)
+        if terminal == True:
+            reward = 100
+            print('Reward = ', reward)
+        else:
+            defects_state = np.sum(state.current_state)
+            defects_next_state = np.sum(state.next_state)
+            reward = defects_state - defects_next_state
+            print('Reward = ', reward)
 
-        
+        return reward
+    
+    # Expansion from leaf node
     def expansion(self, batch_perspectives, s):
-        self.Ps[s], v = self.nnet.forward(batch_perspectives)  # matris med q,värdena för de olika actionen för alla olika perspektiv i en batch
-        
+        self.Ps[s] = self.nnet.forward(batch_perspectives)  # matris med q,värdena för de olika actionen för alla olika perspektiv i en batch
+        v = torch.max(self.Ps[s])
+        v = v.data.numpy()
         # Normalisera
         sum_Ps_s = torch.sum(self.Ps[s]) 
         self.Ps[s] = self.Ps[s]/sum_Ps_s    
-
-        # Gör så att v blir en skalär [-1,1] (medelvärdet för alla perspektiven)
-        sum_v = torch.sum(v) 
-        v = sum_v/(v.size(0))
-        v = v.data.numpy()
             
         # ej besökt detta state tidigare sätter dessa parametrar till 0
         self.Ns[s] = 0

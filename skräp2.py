@@ -1,6 +1,6 @@
 import numpy as np
-from util import Action, Perspective, convert_from_np_to_tensor
-from toric_model import Toric_code
+from src.util import Action, Perspective, convert_from_np_to_tensor
+from src.toric_model import Toric_code
 import math
 import numpy as np
 import copy
@@ -40,12 +40,22 @@ batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
 batch_perspectives = batch_perspectives.to(device)
 batch_position_actions = perspectives.position
 
+current_level = 0 
+actions = []
+
+Ps[s] = nnet.forward(batch_perspectives)
 
 
-Ps[s], v = nnet.forward(batch_perspectives)
 
-print(Ps[s])
-print(v)
+pos = [1,0,2]
+action = 1
+
+best_action = Action(pos, action)
+print(toric.current_state)
+print('---------')
+toric.step(best_action)
+toric.current_state = toric.next_state
+print(toric.next_state)
 
 
 
