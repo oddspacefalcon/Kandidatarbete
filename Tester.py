@@ -14,7 +14,7 @@ for i in range(1):
     toric_code.generate_random_error(0.1)
 
     model = ResNet18()
-    args = {'cpuct': 5, 'num_simulations':20, 'grid_shift': system_size//2, 'disscount_factor':0.95}
+    args = {'cpuct': 5, 'num_simulations':10, 'grid_shift': system_size//2, 'disscount_factor':0.95}
 
     mcts = MCTS(model, device, args, toric_code)
     Qsa_max = mcts.get_probs_action()
