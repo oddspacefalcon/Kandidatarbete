@@ -2,7 +2,7 @@ import numpy as np
 from src.toric_model import Toric_code
 from src.util import Transition, Action, Perspective
 from random import random
-from src.MCTS import MCTS
+from src.MCTS2 import MCTS2
 from collections import namedtuple
 from ResNet import ResNet18
 

@@ -45,8 +45,6 @@ actions = []
 
 Ps[s] = nnet.forward(batch_perspectives)
 
-
-
 pos = [1,0,2]
 action = 1
 
@@ -56,6 +54,37 @@ print('---------')
 toric.step(best_action)
 toric.current_state = toric.next_state
 print(toric.next_state)
+
+
+
+def step(self, action, syndrom, action_matrix):
+        qubit_matrix = action.position[0]
+        row = action.position[1]
+        col = action.position[2]
+        add_opperator = action.action
+        rule_table = np.array(([[0,1,2,3],[1,0,3,2],[2,3,0,1],[3,2,1,0]]), dtype=int)
+
+        #Förändrar action matrisen
+        current_state = action_matrix[qubit_matrix][row][col]
+        action_matrix[qubit_matrix][row][col] = rule_table[add_opperator][current_state]
+
+        #if x or y
+        if add_opperator == 1 or add_opperator ==2:
+            if qubit_matrix == 0:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][row][(col-1)%self.system_size] = (syndrom[0][row][(col-1)%self.system_size]+1)%2
+            elif qubit_matrix == 1:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][(row+1)%self.system_size][col] = (syndrom[0][(row+1)%self.system_size][col]+1)%2
+        #if z or y
+        if add_opperator == 3 or add_opperator ==2:
+            if qubit_matrix == 0:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][(row-1)%self.system_size][col] = (syndrom[0][(row-1)%self.system_size][col]+1)%2
+            elif qubit_matrix == 1:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][row][(col+1)%self.system_size] = (syndrom[0][row][(col+1)%self.system_size]+1)%2
+
 
 
 
