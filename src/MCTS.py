@@ -131,14 +131,15 @@ class MCTS():
         self.step(action, state, actions_taken)
         self.current_level -= 1
         self.current_state = copy.deepcopy(state)
-        self.reward = self.get_reward(self.next_state,self.current_state)
+       
+        #Obs 0.3*reward pga annars blir denna för dominant -> om negativ -> ibland negativt Qsa
+        self.reward = 0.3*self.get_reward(self.next_state,self.current_state)
         
 
         # ............................BACKPROPAGATION................................
 
         if (s,a) in self.Qsa:
-            #Obs 1/2*reward pga annars blir denna för dominant -> om negativ -> negativt Qsa
-            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + 0.3*self.reward + self.args['disscount_factor']*v)/(self.Nsa[(s,a)]+1)
+            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + self.reward + self.args['disscount_factor']*v)/(self.Nsa[(s,a)]+1)
             #print('Qsa: ',self.Qsa[(s,a)])
             #print('reward:', self.reward)
             self.Nsa[(s,a)] += 1
