@@ -11,20 +11,21 @@ for i in range(1):
 
     device = 'cpu'
     system_size = 3
-
     toric_code = Toric_code(system_size)
     toric_code.generate_random_error(0.1)
     #syndrom = toric_code.syndrom(toric_code.current_state)
 
     model = ResNet18()
-    args = {'cpuct': 5, 'num_simulations':20, 'grid_shift': system_size//2}
+    args = {'cpuct': 5, 'num_simulations':30, 'grid_shift': system_size//2, 'disscount_factor':0.95}
+
 
 
     mcts = MCTS(model, device, args, toric_code)
-    pi = mcts.get_probs_action()
+    Qsa_max = mcts.get_probs_action()
 
-    print('antal perspektiv:', len(pi))
-    print('pi:', pi)
+    #print('antal perspektiv:', len(pi))
+    print('Q:', Qsa_max)
+    #print('all_Qsa:', all_Qsa)
     #print('action:', action)
     print('----------------------------------')
 

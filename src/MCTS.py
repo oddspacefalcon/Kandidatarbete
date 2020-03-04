@@ -31,6 +31,8 @@ class MCTS():
         self.current_level = 0
         self.loop_check = set() # set that stores state action pairs
         self.system_size = self.syndrom.shape[1]
+        self.next_state = []
+        self.current_state = []
 
 
     def get_probs_action(self, temp=1):
@@ -39,35 +41,19 @@ class MCTS():
         s = str(self.syndrom)
         actions_taken = np.zeros((2,size,size), dtype=int)
 
+        #.............................Search...............................
+
         for i in range(self.args['num_simulations']):
-             # if not copied the operations on the toric code would be saved over every tree
-             #instead add toric_codes syndrom
             self.search(copy.deepcopy(self.syndrom), actions_taken)
-             # clear loop_check so the same path can be taken in new tree
             self.loop_check.clear()
-
-        #kollar inte alla möjliga actions
+        
+       #..............................Max Qsa .............................
         actions = self.get_possible_actions(self.syndrom)
+        all_Qsa = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
+        all_Qsa = np.reshape(all_Qsa, all_Qsa.size)
+        maxQ = max(all_Qsa)
 
-        counts = np.array([[self.Nsa[(s,str(a))] if (s,str(a)) in self.Nsa else 0 for a in position] for position in actions])
-        counts = np.reshape(counts, counts.size)
-
-        if temp==0:
-            bestA = np.argmax(counts)
-            probs = [0]*len(counts)
-            probs[bestA]=1
-            return probs, actions[bestA]
-
-        #evt välja största Q-värde
-        counts = [x**(1./temp) for x in counts]
-        counts_sum = float(sum(counts))
-        probs = [x/counts_sum for x in counts]
-        probs = torch.tensor(probs)
-        # sample an action according to probabilities probs
-        action = torch.multinomial(probs, 1)
-        probs = probs.view(-1, 3)
-
-        return probs
+        return maxQ
 
     def search(self, state, actions_taken):
         # np.arrays unhashable, needs string
@@ -119,7 +105,8 @@ class MCTS():
             perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
             best_perspective = perspective_list[perspective_index]
 
-            action = Action(np.array(best_perspective.position), action_index+1)
+            action = Action(np.array(best_perspective.position), action_index+1) #bytte ut np.array(best_perspective.position)
+            
 
             a = str(action)
             if((s,a) not in self.loop_check):
@@ -131,21 +118,29 @@ class MCTS():
         
         #går ett steg framåt
         self.step(action, state, actions_taken)
+        self.current_level += 1
+        if self.current_level == 1:
+            self.actions.append(a)
+            
         
         #kollar igenom nästa state
         v = self.search(state, actions_taken)
 
-        #går tilbaka med samma steg
-        next_state = state
+        #går tilbaka med samma steg och finn rewards
+        self.next_state = copy.deepcopy(state)
         self.step(action, state, actions_taken)
-        current_state = state
-        self.reward = self.get_reward(next_state,current_state)
-
+        self.current_level -= 1
+        self.current_state = copy.deepcopy(state)
+        self.reward = self.get_reward(self.next_state,self.current_state)
+        
 
         # ............................BACKPROPAGATION................................
 
         if (s,a) in self.Qsa:
-            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)]+1)
+            #Obs 1/2*reward pga annars blir denna för dominant -> om negativ -> negativt Qsa
+            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + 0.3*self.reward + self.args['disscount_factor']*v)/(self.Nsa[(s,a)]+1)
+            #print('Qsa: ',self.Qsa[(s,a)])
+            #print('reward:', self.reward)
             self.Nsa[(s,a)] += 1
         else:
             self.Qsa[(s,a)] = v
@@ -159,16 +154,13 @@ class MCTS():
         terminal = np.all(next_state==0)
         if terminal == True:
             reward = 100
-            print('Reward = ', reward)
+            #print('Reward = ', reward)
  
         else:
             defects_state = np.sum(current_state)
             defects_next_state = np.sum(next_state)
             reward = defects_state - defects_next_state
-            print('Reward = ', reward)
-            #print(next_state)
-            #print(current_state)
-
+            #print('Reward = ', reward)
         return reward
 
     def UCBpuct(self, probability_matrix, actions, s):
@@ -260,4 +252,4 @@ class MCTS():
     def get_possible_actions(self, state):
         perspectives = self.generate_perspective(self.args['grid_shift'], state)
         perspectives = Perspective(*zip(*perspectives))
-        return [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
+        return [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position] #bytte ut np.array(p_pos)

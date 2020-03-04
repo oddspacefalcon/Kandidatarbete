@@ -37,8 +37,10 @@ class MCTS2():
     
         #..............................Policy pi[a|s] .............................
 
+  
         s = np.array_str(self.toric.current_state)
         counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in self.actions]
+        print(self.actions)
 
         if temp==0:
             bestA = np.argmax(counts)
