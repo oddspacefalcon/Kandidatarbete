@@ -25,7 +25,7 @@ from .MCTS import MCTS
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
-                discount_factor=0.95, number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
+                number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
                 cpuct=0.5, num_mcts_simulations=20):
         # device
         self.device = device
@@ -51,12 +51,10 @@ class RL():
         self.network_name = Network_name
         self.network = Network
         if Network == ResNet18 or Network == ResNet34 or Network == ResNet50 or Network == ResNet101 or Network == ResNet152:
-            self.policy_net = self.network()
+            self.model = self.network()
         else:
-            self.policy_net = self.network(system_size, number_of_actions, device)
-        self.target_net = deepcopy(self.policy_net)
-        self.policy_net = self.policy_net.to(self.device)
-        self.target_net = self.target_net.to(self.device)
+            self.model = self.network(system_size, number_of_actions, device)
+        self.model = self.model.to(self.device)
         self.learning_rate = learning_rate
         # hyperparameters RL
         self.number_of_actions = number_of_actions
@@ -64,31 +62,32 @@ class RL():
 
 
     def save_network(self, PATH):
-        torch.save(self.policy_net, PATH)
+        torch.save(self.model, PATH)
 
 
     def load_network(self, PATH):
-        self.policy_net = torch.load(PATH, map_location='cpu')
-        self.target_net = deepcopy(self.policy_net)
-        self.policy_net = self.policy_net.to(self.device)
-        self.target_net = self.target_net.to(self.device)
+        self.model = torch.load(PATH, map_location='cpu')
+        self.model = self.model.to(self.device)
 
 
     def experience_replay(self, optimizer, batch_size):
-        self.policy_net.train()
-        # get transitions and unpack them
+        self.model.train()
+        # get transitions and unpack them (to gpu)
         transitions, weights, indices = self.memory.sample(batch_size, 0.4) # beta parameter 
-        p_batch, v_batch, pi_batch, z_batch = transitions[0]
+        batch_batch_perspective, pi_batch, z_batch = transitions[0]
         # compute loss and update replay memory
         optimizer.zero_grad()
-        loss = self.get_loss(p_batch, v_batch, pi_batch, z_batch, weights, indices)
+        p_batch, v_batch = self.model(batch_batch_perspective.to(self.device))
+        loss = self.get_loss(p_batch, v_batch, pi_batch.to(self.device), z_batch.to(self.device), weights, indices)
         # backpropagate loss
         loss.backward()
         optimizer.step()
 
 
-    def get_loss(self, p_batch, v_batch, pi_batch, z_batch, weights, indices):      
-        loss = (z_batch-v_batch)**2 - torch.sum(pi_batch * torch.log(p_batch)) # dim 1 resp 3*3 är ett problem. Vill ha ett tal för varje batch
+    def get_loss(self, p_batch, v_batch, pi_batch, z_batch, weights, indices):
+        p_batch = p_batch.flatten()
+        pi_batch = pi_batch.flatten()      
+        loss = (z_batch-v_batch)**2 - torch.sum(pi_batch * torch.log(p_batch))
         # for prioritized experience replay
         
         if self.replay_memory == 'proportional':
@@ -99,15 +98,13 @@ class RL():
         return torch.sum(loss)
 
 
-    def train(self, epochs, training_steps=int, target_update=int, optimizer=str,
-        batch_size=int, replay_start_size=int, cpuct_start=50, cpuct_end=0.5):
-        # set network to train mode
-        self.policy_net.train()
+    def train(self, epochs, training_steps=int, optimizer=str,
+        batch_size=int, replay_start_size=int, cpuct_start=50, cpuct_end=0.1):
         # define criterion and optimizer
         if optimizer == 'RMSprop':
-            optimizer = optim.RMSprop(self.policy_net.parameters(), lr=self.learning_rate, weight_decay=0.0001)
+            optimizer = optim.RMSprop(self.model.parameters(), lr=self.learning_rate, weight_decay=0.0001)
         elif optimizer == 'Adam':    
-            optimizer = optim.Adam(self.policy_net.parameters(), lr=self.learning_rate, weight_decay=0.0001)
+            optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=0.0001)
         # init counters
         steps_counter = 0
         update_counter = 1
@@ -132,29 +129,29 @@ class RL():
                 steps_counter += 1
                 iteration += 1
 
-                self.target_net.eval()
-                self.policy_net.eval()
-
                 perspectives = self.toric.generate_perspective(self.grid_shift, self.toric.current_state)
                 # preprocess batch of perspectives and actions 
                 perspectives = Perspective(*zip(*perspectives))
                 batch_perspectives = np.array(perspectives.perspective)
-                batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-                batch_perspectives = batch_perspectives.to(self.device)
-                batch_position_actions = perspectives.position
-
-                p, v = self.policy_net.forward(batch_perspectives)
-                # pga lossfunktionen behöver vektorer
-                p = p.flatten()
+                batch_perspectives = convert_from_np_to_tensor(batch_perspectives) 
 
                 self.tree_args['cpuct'] = max(self.tree_args['cpuct'] - cpuct_decay, cpuct_end)
 
-                mcts = MCTS(deepcopy(self.toric), self.target_net, self.device, self.tree_args)
+                mcts = MCTS(deepcopy(self.toric), deepcopy(self.model), self.device, self.tree_args)
                 pi, action = mcts.get_probs_action()
 
-                mcts_transitions.append((p, v, pi))
+                mcts_transitions.append((batch_perspectives, pi))
 
-                print(self.tree_args['cpuct'])
+                print('training steps:', iteration)
+
+                m1 = torch.cuda.memory_reserved(device='cuda')
+                m2 = torch.cuda.memory_reserved(device='cuda')
+                print(m1 * 1e-6, 'Mb')
+                #print((m2-m1) * 1e-6, 'Mb')
+                print('cuda?:', torch.cuda.is_available())
+                torch.cuda.empty_cache()    
+
+                #print(self.tree_args['cpuct'])
 
                 if iteration == 1:
                     start_errors = np.sum(self.toric.current_state)
@@ -165,6 +162,8 @@ class RL():
                 # set next_state to new state and update terminal state
                 self.toric.current_state = self.toric.next_state
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
+
+            
             
             # 1 > andelen korrigerade > -1
             z = torch.tensor(1 if terminal_state == 0 else max((start_errors - end_errors) / start_errors, -1))
@@ -178,9 +177,7 @@ class RL():
                 update_counter += 1
                 self.experience_replay(optimizer, batch_size)
 
-            # set target_net to policy_net
-            if update_counter % target_update == 0:
-                self.target_net = deepcopy(self.policy_net)
+            
 
 
     def prediction(self, num_of_predictions=1, num_of_steps=50, PATH=None, plot_one_episode=False, 
@@ -188,7 +185,6 @@ class RL():
         # load network for prediction and set eval mode 
         if PATH != None:
             self.load_network(PATH)
-        self.policy_net.eval()
         # init matrices 
         ground_state_list = np.zeros(len(prediction_list_p_error))
         error_corrected_list = np.zeros(len(prediction_list_p_error))
@@ -220,7 +216,7 @@ class RL():
                 while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                     num_of_steps_per_episode += 1
 
-                    mcts = MCTS(deepcopy(self.toric), self.policy_net, self.device, self.tree_args)
+                    mcts = MCTS(deepcopy(self.toric), self.model, self.device, self.tree_args)
                     pi, action = mcts.get_probs_action()
                     self.toric.step(action)
                     self.toric.current_state = self.toric.next_state
@@ -250,15 +246,14 @@ class RL():
         return error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error
 
 
-    def train_for_n_epochs(self, training_steps=int, epochs=int, num_of_predictions=100, num_of_steps_prediction=50, target_update=100, 
+    def train_for_n_epochs(self, training_steps=int, epochs=int, num_of_predictions=100, num_of_steps_prediction=50, 
         optimizer=str, save=True, directory_path='network', prediction_list_p_error=[0.1],
         batch_size=32, replay_start_size=32):
         
-        data_all = np.zeros((1, 16))
+        data_all = np.zeros((1, 15))
 
         for i in range(epochs):
             self.train(training_steps=training_steps,
-                    target_update=target_update,
                     optimizer=optimizer,
                     batch_size=batch_size,
                     replay_start_size=replay_start_size,
@@ -269,15 +264,15 @@ class RL():
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error,                                                                                                                                                                        save_prediction=True,
                                                                                                                                                                         num_of_steps=num_of_steps_prediction)
 
-            data_all = np.append(data_all, np.array([[self.system_size, self.network_name, i+1, self.replay_memory, self.device, self.learning_rate, target_update, optimizer,
+            data_all = np.append(data_all, np.array([[self.system_size, self.network_name, i+1, self.replay_memory, self.device, self.learning_rate, optimizer,
             training_steps * (i+1), prediction_list_p_error[0], num_of_predictions, len(failed_syndroms)/2, error_corrected_list[0], ground_state_list[0], average_number_of_steps_list[0], self.p_error]]), axis=0)
             # save training settings in txt file 
             np.savetxt(directory_path + '/data_all.txt', data_all, 
-                header='system_size, network_name, epoch, replay_memory, device, learning_rate, target_update, optimizer, total_training_steps, prediction_list_p_error, number_of_predictions, number_of_failed_syndroms, error_corrected_list, ground_state_list, average_number_of_steps_list, p_error_train', delimiter=',', fmt="%s")
+                header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, number_of_predictions, number_of_failed_syndroms, error_corrected_list, ground_state_list, average_number_of_steps_list, p_error_train', delimiter=',', fmt="%s")
             # save network
             step = (i + 1) * training_steps
-            PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{6}_target_update_{4}_optimizer_{5}__steps_{3}_learning_rate_{7}.pt'.format(
-                i+1, self.network_name, self.system_size, step, target_update, optimizer, self.replay_memory, self.learning_rate)
+            PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{5}_optimizer_{4}__steps_{3}_learning_rate_{6}.pt'.format(
+                i+1, self.network_name, self.system_size, step, optimizer, self.replay_memory, self.learning_rate)
             self.save_network(PATH)
             
         return error_corrected_list

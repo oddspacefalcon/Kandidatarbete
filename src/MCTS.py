@@ -5,6 +5,7 @@ import math
 import copy
 import torch
 import random
+import sys
 EPS = 1e-8
 
 class MCTS():
@@ -20,80 +21,79 @@ class MCTS():
         self.Nsa = {}       # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
         self.Ps = {}        # stores initial policy (returned by neural net)
-        self.device = device # 'cpu'
+        self.device = device
         self.actions = [] # stores root node actions
         self.current_level = 0
         self.loop_check = set() # set that stores state action pairs
 
     def search(self, state):
-        # np.arrays unhashable, needs string
-        s = np.array_str(state.current_state)
+        # so no computation history is saved
+        with torch.no_grad():
+            # np.arrays unhashable, needs string
+            s = np.array_str(state.current_state)
 
-        perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
-        number_of_perspectives = len(perspectives)
-        perspectives = Perspective(*zip(*perspectives))
-        batch_perspectives = np.array(perspectives.perspective)
-        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-        batch_perspectives = batch_perspectives.to(self.device)
-        batch_position_actions = perspectives.position
+            perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
+            number_of_perspectives = len(perspectives)
+            perspectives = Perspective(*zip(*perspectives))
+            batch_perspectives = np.array(perspectives.perspective)
+            batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+            batch_perspectives = batch_perspectives.to(self.device)
+            batch_position_actions = perspectives.position
 
-        if np.all(state.current_state == 0):
-            # if terminal state
-            return 1 # terminal <=> vunnit
+            if np.all(state.current_state == 0):
+                # if terminal state
+                return 1 # terminal <=> vunnit
 
-        if s not in self.Ps:
-            # leaf node => expand
-            # får väldigt små sannolikheter pga softmax => Q dominerar i UCB => liten exploration, kompenserar med cpuct = 50.
-            # kanske kan vara bra att sänka cpuct gradvis under träningen sen
-            self.Ps[s], v = self.model.forward(batch_perspectives)
-            #self.Ps[s], = random.random()
-            self.Ns[s] = 0
+            if s not in self.Ps:
+                # leaf node => expand
+                self.Ps[s], v = self.model(batch_perspectives)
+                self.Ns[s] = 0
+                return v
+
+            cur_best = -float('inf')
+            best_act = -1
+
+            self.current_level += 1
+            # pick the action with the highest upper confidence bound, using all perspectives of toric code s
+            for perspective in range(number_of_perspectives):
+                for action in range(1, 4):
+
+                    a = Action(batch_position_actions[perspective], action)
+
+                    if self.current_level == 1:
+                        self.actions.append(a)
+
+                    if (s,a) in self.Qsa:
+                        u = self.Qsa[(s,a)] + self.args['cpuct']*self.Ps[s][perspective][action-1]*\
+                            math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
+                    else:
+                        u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
+                    # loop_check to make sure the same bits are not flipped back and forth, creating an infinite recursion loop
+                    if u > cur_best and (s,a) not in self.loop_check:
+                        cur_best = u
+                        best_act = a
+            
+            self.loop_check.add((s,best_act))
+
+            a = best_act
+            state.step(a)
+            state.current_state = state.next_state
+
+            v = self.search(copy.deepcopy(state))
+
+            if (s,a) in self.Qsa:
+                self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)]+1)
+                self.Nsa[(s,a)] += 1
+            else:
+                self.Qsa[(s,a)] = v
+                self.Nsa[(s,a)] = 1
+
+            self.Ns[s] += 1
             return v
 
-        cur_best = -float('inf')
-        best_act = -1
-
-        # pick the action with the highest upper confidence bound, using all perspectives of toric code s
-
-        self.current_level += 1
-
-        for perspective in range(number_of_perspectives):
-            for action in range(1, 4):
-
-                a = Action(batch_position_actions[perspective], action)
-
-                if self.current_level == 1:
-                    self.actions.append(a)
-
-                if (s,a) in self.Qsa:
-                    u = self.Qsa[(s,a)] + self.args['cpuct']*self.Ps[s][perspective][action-1]*\
-                        math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
-                else:
-                    u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
-                # loop_check to make sure the same bits are not flipped back and forth, creating an infinite recursion loop
-                if u > cur_best and (s,a) not in self.loop_check:
-                    cur_best = u
-                    best_act = a
-
-        self.loop_check.add((s,best_act))
-
-        a = best_act
-        state.step(a)
-        state.current_state = state.next_state
-
-        v = self.search(copy.deepcopy(state))
-
-        if (s,a) in self.Qsa:
-            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)]+1)
-            self.Nsa[(s,a)] += 1
-        else:
-            self.Qsa[(s,a)] = v
-            self.Nsa[(s,a)] = 1
-
-        self.Ns[s] += 1
-        return v
-
     def get_probs_action(self, temp=1):
+
+        self.model.eval()
 
         s = np.array_str(self.toric_code.current_state)
 
@@ -102,6 +102,9 @@ class MCTS():
             self.search(copy.deepcopy(self.toric_code))
              # clear loop_check so the same path can be taken in new tree
             self.loop_check.clear()
+        
+        del self.model, self.Ps
+        torch.cuda.empty_cache()
 
         counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in self.actions]
 
