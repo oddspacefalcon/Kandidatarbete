@@ -8,6 +8,7 @@ import random
 import time
 
 
+
 EPS = 1e-8
 
 class MCTS_Rollout():
@@ -29,6 +30,7 @@ class MCTS_Rollout():
         self.Nsa = {}        # stores #times edge s,a was visited
         self.Ns = {}         # stores #times board s was visited
         self.Wsa = {}         # stores total value policy for node
+        self.Actions_s = {}
         self.device = device # 'cpu' or 'cuda'
         self.actions = []
         self.current_level = 0
@@ -41,29 +43,36 @@ class MCTS_Rollout():
         self.qubit_matrix = np.zeros((2, self.system_size, self.system_size), dtype=int)
         self.ground_state = True    # True: only trivial loops, 
                                    # False: non trivial loop 
+   
 
-    
     def get_maxQsa(self, temp=1):
 
         size = self.system_size
         s = str(self.syndrom)
         actions_taken = np.zeros((2,size,size), dtype=int)
 
+     
         #.............................Search...............................
 
         for i in range(self.args['num_simulations']):
             self.search(copy.deepcopy(self.syndrom), actions_taken)
             self.loop_check.clear()
-            
+        
+        #print('len actions',len(self.Actions_s[s])*3)
             
        #..............................Max Qsa .............................
 
         actions = self.get_possible_actions(self.syndrom)
-        all_Qsa = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
-        all_Qsa = np.reshape(all_Qsa, all_Qsa.size)
+        #actions = self.Actions_s[s]
+        all_Qsa2D = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
+        all_Qsa = np.reshape(all_Qsa2D, all_Qsa2D.size)
         maxQ = max(all_Qsa)
         
-        return maxQ, all_Qsa
+        #best action
+        index_max = np.unravel_index(all_Qsa2D.argmax(), all_Qsa2D.shape)
+        best_action = actions[index_max[0]][index_max[1]]
+
+        return maxQ, all_Qsa, best_action
 
     def search(self, state, actions_taken):
         with torch.no_grad():
@@ -81,28 +90,42 @@ class MCTS_Rollout():
          
             #...........................Check if terminal state.............................
 
-            all_zeros = not np.any(state)
+            #Check if non trivial loop
             self.qubit_matrix = state
-            if all_zeros:
-                if self.eval_ground_state(): 
-                    #Trivial loop --> gamestate won!
-                    print('We Won! :)')
-                    return 100
-                else:
-                    #non trivial loop --> game lost!
-                    print('We Lost! :(')
-                    return 0
-    
+            self.eval_ground_state()
+            if self.ground_state is False:
+                v = -20
+                print('trivial loop')
+                return v
+            
+            #if no trivial loop check if terminal state
+            all_zeros = not np.any(state)
+            if all_zeros:   
+                #Trivial loop --> gamestate won!
+                print('We Won! :)')
+                v = 100
+                return v
+             
             # ............................If leaf node......................................
     
             if s not in self.Ns:
                 v = self.rollout(perspective_list, copy.deepcopy(state), actions_taken) 
                 # If this state has not been visited.
                 self.Ns[s] = 0
+                
+                '''
+                #Choose a fix number of random actions to explore -> not all
+                self.Actions_s[s] = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
+                while True:
+                    if len(self.Actions_s[s])*3 > self.args['actions_to_explore']:
+                        del self.Actions_s[s][random.randint(0,len(self.Actions_s[s])-1)] # delete random element in actions
+                    else:
+                        break
+                '''
+                
                 return v
     
             # ..........................Get best action...................................
-    
             actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
             UpperConfidence = self.UCBpuct(actions, s)
     
@@ -138,21 +161,30 @@ class MCTS_Rollout():
             else:
                 self.Wsa[(s,a)] = v
                 self.Nsa[(s,a)] = 1
-                self.Qsa[(s,a)] = self.Wsa[(s,a)]
+                self.Qsa[(s,a)] = v #self.Wsa[(s,a)]
 
     
             self.Ns[s] += 1
         return v
 
-    def rollout(self, perspective_list, state, actions_taken):
+    def rollout(self, perspective_list, state1, actions_taken):
         counter = 0 #number of steps in rollout
         accumulated_reward = 0 
         v = 0
-        discount = 0.96 
+        discount = 0.95
+        state = copy.deepcopy(state1)
         while True:
             counter += 1
-            
             all_zeros = not np.any(state)
+
+            #Check if non trivial loop
+            self.qubit_matrix = state
+            self.eval_ground_state()
+            if self.ground_state is False:
+                v = -20
+                print('non trivial loop')
+                break
+
             # om ej terminal state
             if all_zeros is False and counter < self.args['rollout_length']:
                 perspective_list = self.generate_perspective(self.args['grid_shift'], state)
@@ -167,11 +199,9 @@ class MCTS_Rollout():
                 current_state = copy.deepcopy(state)
                 self.step(rand_action, state, actions_taken)
                 next_state = copy.deepcopy(state)
-
-                self.qubit_matrix = state
                 
                 #get reward for step
-                accumulated_reward = self.get_reward(next_state, current_state)
+                accumulated_reward += self.get_reward(next_state, current_state)
                 if accumulated_reward < 0:
                     accumulated_reward = 0
                 
@@ -179,16 +209,12 @@ class MCTS_Rollout():
                 v += discount**(counter)*accumulated_reward   
             
             #Break if terminal state
+            all_zeros = not np.any(state)
             if all_zeros:
-                if self.eval_ground_state(): 
-                    #Trivial loop --> gamestate won!
-                    v += discount**(counter)*100
-                    print('We Won in rollout! :)', state)
-                    break
-                else:
-                    #non trivial loop --> game lost!
-                    print('We Lost in rollout! :(')
-                    return 
+                v += discount**(counter)*100
+                #print('We Won in rollout! :)')
+                break
+            
             elif counter == self.args['rollout_length']:
                 #print('Max rollout reached')
                 break
