@@ -13,7 +13,7 @@ EPS = 1e-8
 
 class MCTS_Rollout():
 
-    def __init__(self, device, args, toric_code=None, syndrom=None):
+    def __init__(self, device, args,  Ns, Nsa, Qsa, Wsa, toric_code=None, syndrom=None):
 
         self.toric_code = toric_code # toric_model object
 
@@ -26,10 +26,10 @@ class MCTS_Rollout():
             self.syndrom = self.toric_code.current_state
 
         self.args = args     # c_puct, num_simulations (antalet noder), grid_shift 
-        self.Qsa = {}        # stores Q values for s,a (as defined in the paper)
-        self.Nsa = {}        # stores #times edge s,a was visited
-        self.Ns = {}         # stores #times board s was visited
-        self.Wsa = {}         # stores total value policy for node
+        self.Qsa = Qsa      # stores Q values for s,a (as defined in the paper)
+        self.Nsa = Nsa        # stores #times edge s,a was visited
+        self.Ns = Ns        # stores #times board s was visited
+        self.Wsa = Wsa         # stores total value policy for node
         self.Actions_s = {}
         self.device = device # 'cpu' or 'cuda'
         self.actions = []
@@ -66,13 +66,13 @@ class MCTS_Rollout():
         #actions = self.Actions_s[s]
         all_Qsa2D = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
         all_Qsa = np.reshape(all_Qsa2D, all_Qsa2D.size)
-        maxQ = max(all_Qsa)
+        maxQ = (all_Qsa != 0).argmax()
         
         #best action
-        index_max = np.unravel_index(all_Qsa2D.argmax(), all_Qsa2D.shape)
+        index_max = np.unravel_index((all_Qsa2D != 0).argmax(), all_Qsa2D.shape)
         best_action = actions[index_max[0]][index_max[1]]
 
-        return maxQ, all_Qsa, best_action
+        return maxQ, all_Qsa, best_action, self.Qsa, self.Wsa, self.Nsa, self.Ns
 
     def search(self, state, actions_taken):
         with torch.no_grad():
@@ -131,7 +131,7 @@ class MCTS_Rollout():
     
             #Choose action with higest UCB which has not been explored before
             while True:
-                perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
+                perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence !=0), UpperConfidence.shape)
                 best_perspective = perspective_list[perspective_index]
     
                 action = Action(np.array(best_perspective.position), action_index+1)
@@ -202,8 +202,8 @@ class MCTS_Rollout():
                 
                 #get reward for step
                 accumulated_reward += self.get_reward(next_state, current_state)
-                if accumulated_reward < 0:
-                    accumulated_reward = 0
+                #if accumulated_reward < 0:
+                   # accumulated_reward = 0
                 
                 # discount factor because want to promote early high rewards
                 v += discount**(counter)*accumulated_reward   
@@ -235,7 +235,7 @@ class MCTS_Rollout():
     def UCBpuct(self, actions, s):
 
         current_Qsa = np.array([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions])
-        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0.0001 for a in opperator_actions] for opperator_actions in actions])
+        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0.00000001 for a in opperator_actions] for opperator_actions in actions])
         if s not in self.Ns:
             current_Ns = 1
         else:
@@ -243,7 +243,7 @@ class MCTS_Rollout():
                 current_Ns = 1
             else:
                 current_Ns = self.Ns[s]
-        #print('current: ',np.log(current_Ns))
+
         return current_Qsa + self.args['cpuct']*np.sqrt(np.log(current_Ns)/(current_Nsa))
 
 

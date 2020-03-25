@@ -56,17 +56,11 @@ actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspec
 
 print('________________')
 
-a = [[1,2,3],[10,6,7]]
+a = np.array([[0,0,-3],[-10,-6,-7]])
 b = [1,2,3,10,6,7]
 
 w, h = 3, 2; #2 lists med 3 element i varje
 c = [[0 for x in range(w)] for y in range(h)]
 
-count = 0
-for i in range(2):
-    for j in range(3):
-        c[i][j] = b[count]
-        count += 1
-print(c)
-
-print(sum(a))
+index_max = np.unravel_index((a!=0).argmax(), a.shape)
+print(index_max)
