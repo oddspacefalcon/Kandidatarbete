@@ -1,82 +1,169 @@
 import numpy as np
-from util import Action, Perspective
-from toric_model import Toric_code
+from .toric_model import Toric_code
+from .util import Perspective, Action, convert_from_np_to_tensor
 import math
 import copy
+import torch
+import random
+EPS = 1e-8
 
 class MCTS():
-    def __init__(self, args, nnet, toric_code):
 
-        '''
-        Problem med denna kod:
-        1. Behöver ha tillgång till 'device' för att kunna köra perspectives igenom nätvärket se #Problem 1 
+    def __init__(self, model, device, args, toric_code=None, syndrom=None):
+        self.toric_code = toric_code # toric_model object
+
+        if toric_code is None:
+            if syndrom is None:
+                raise ValueError("Invalid imput: toric_code or syndrom cannot both have a None value")
+            else:
+                self.syndrom = syndrom
+        else:
+            self.syndrom = self.toric_code.current_state
+
+        self.model = model   # resnet
+        self.args = args     # c_puct, num_simulations (antalet noder), grid_shift 
+        self.Qsa = {}        # stores Q values for s,a (as defined in the paper)
+        self.Nsa = {}        # stores #times edge s,a was visited
+        self.Ns = {}         # stores #times board s was visited
+        self.Ps = {}         # stores initial policy (returned by neural net)
+        self.device = device
+        self.loop_check = set() # set that stores state action pairs
+        self.system_size = self.syndrom.shape[1]
+        self.next_state = []
+        self.current_state = []
+        self.batch_size = self.syndrom.shape[0]
 
 
-        '''
-        self.toric = toric_code
-        self.nnet = nnet
-        #memory buffer används ej här
-        #self.memory_buffer = memeory_buffer
-        '''
-        args ska innehålla gridshift variablen från RL
-        '''
-        self.args = args
-        self.root_state = np.copy(self.toric.qubit_matrix)
-        self.actions_taken = []
+    def get_qs_actions(self, temp=1):
+
+        size = self.system_size
+        s = str(self.syndrom)
+        actions_taken = np.zeros((2,size,size), dtype=int)
+
+        #.............................Search...............................
+
+        for i in range(self.args['num_simulations']):
+            self.search(copy.deepcopy(self.syndrom), actions_taken)
+            self.loop_check.clear()
         
-        self.index = 0
-        self.branches = {} #inte säker på om denna behövs --> använder denna iallafall inte
+       #..............................Max Qsa .............................
+        actions = self.get_possible_actions(self.syndrom)
+        all_Qsa = torch.tensor([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
 
-        #Vet ej om vi ska byta ut dessa?
-        self.Qsa = {}       # stores Q values for s,a (as defined in the paper)
-        self.Nsa = {}       # stores #times edge s,a was visited
-        self.Ns = {}        # stores #times board s was visited
-        self.Ps = {}        # stores initial policy (returned by neural net)
+        return all_Qsa, actions
 
-        self.Es = {}        # stores game.getGameEnded ended for board s
+    def search(self, state, actions_taken):
+        with torch.no_grad():
+            # np.arrays unhashable, needs string
+            s = str(state)
 
-        #Denna används inte i våran algoritm ()
-        self.Vs = {}        # stores game.getValidMoves for board s 
+            #..................Get perspectives and batch for network......................
 
-    def get_input_perspectives(self):
-        self.toric.syndrom('next_state')
-        return self.toric.generate_perspective(self.args.gridshift, self.toric.next_state)
-    
-    def get_actionprob(self, temp=1):
-        for i in range(self.args.nr_simulations):
-            print("nr simulations " + str(i))
-            self.search(copy.deepcopy(self.root_state))
+            perspective_list = self.generate_perspective(self.args['grid_shift'], state)
+            number_of_perspectives = len(perspective_list)
+            perspectives = Perspective(*zip(*perspective_list))
+            batch_perspectives = np.array(perspectives.perspective)
+            batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+            batch_perspectives = batch_perspectives.to(self.device)
+            batch_position_actions = perspectives.position
+
+            #...........................Check if terminal state.............................
+
+            if np.all(state == 0):
+                if state.eval_ground_state(): #ska det vara self.toric.eval_ground_state(): här istället?
+                    #Trivial loop --> gamestate won!
+                    return 1
+                else:
+                    #non trivial loop --> game lost!
+                    return -1
+
+            # ............................If leaf node......................................
+
+            if s not in self.Ps:
+                # leaf node => expand
+                self.Ps[s] = self.model(batch_perspectives)
+                self.correct_Qs[s] = 
+                v = torch.max(self.Ps[s])
+                # Normalisera. # Fungerar detta iom att nätverket outputar negativa tal också? Relu på output?
+                sum_Ps_s = torch.sum(self.Ps[s]) 
+                self.Ps[s] = self.Ps[s]/sum_Ps_s    
+                    
+                # ej besökt detta state tidigare sätter dessa parametrar till 0
+                self.Ns[s] = 0
+                return v
+
+            # ..........................Get best action...................................
+
+            #Göra använda numpy för att göra UBC kalkyleringen snabbare.
+            actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
+            UpperConfidence = self.UCBpuct(self.Ps[s], actions, s)
+
+
+            #Väljer ut action med högst UCB som inte har valts tidigare (i denna staten):
+            while True:
+                # omvandlar 1D index -> 2D index
+                argmax = torch.argmax(UpperConfidence).cpu().numpy()
+                perspective_index = argmax // UpperConfidence.shape[1]
+                action_index = argmax % UpperConfidence.shape[1]
+                best_perspective = perspective_list[perspective_index]
+
+                action = Action(np.array(best_perspective.position), action_index+1)
+
+                a = str(action)
+
+                if (s,a) not in self.loop_check:
+                    self.loop_check.add((s,a))
+                    break
+                else:
+                    UpperConfidence[perspective_index][action_index] = -float('inf')
         
-        self.toric.qubit_matrix = self.root_state
-        s = str(self.root_state)
+            #går ett steg framåt
+            self.step(action, state, actions_taken)                
+            
+            #kollar igenom nästa state
+            v = self.search(state, actions_taken)
 
-        #Ger alla positioner: [(Q, i, j), (Q, i, j), ... ] för alla perspektiv (i korrekt ordning)
-        perspective_pos = Perspective(*zip(*self.get_input_perspectives())).position
+            #går tilbaka med samma steg och finn rewards
+            self.next_state = copy.deepcopy(state)
+            self.step(action, state, actions_taken)
+            self.current_state = copy.deepcopy(state)
+            
+            #Obs 0.3*reward pga annars blir denna för dominant -> om negativ -> ibland negativt Qsa
+            self.reward = 0.3*self.get_reward(self.next_state,self.current_state)
+            
 
-        #actions = [[X, Y, Z], [X, Y, Z], ... ] --> Varje [X, Y, Z] är dessa opperatorer på ett visst perspektiv
-        actions = [[str(Action(np.array(p_pos), x+1)) for x in range(3)] for p_pos in perspective_pos]
+            # ............................BACKPROPAGATION................................
 
-        
-        pi = [[self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in perspective] for perspective in actions]
-        
-        if temp==0:
-            bestA = np.argmax(pi)
-            pi = [0]*len(pi)
-            pi[bestA]=1
-            return pi
-        #pi = [[prob**(1./temp) for prob in perspective] for perspective in pi]
-        print(np.sum(pi))
-        pi = np.array(pi)
+            if (s,a) in self.Qsa:
+                
+                self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + self.reward + self.args['disscount_factor']*v)/(self.Nsa[(s,a)]+1)
+                #print('Qsa: ',self.Qsa[(s,a)])
+                #print('reward:', self.reward)
+                self.Nsa[(s,a)] += 1
+            else:
+                self.Qsa[(s,a)] = v
+                self.Nsa[(s,a)] = 1
 
-        return pi
+            self.Ns[s] += 1
+        return v 
+
+    # Reward
+    def get_reward(self, next_state, current_state):
+        terminal = np.all(next_state==0)
+        if terminal == True:
+            reward = 100
+            #print('Reward = ', reward)
+        else:
+            defects_state = np.sum(current_state)
+            defects_next_state = np.sum(next_state)
+            reward = defects_state - defects_next_state
+            #print('Reward = ', reward)
+        return reward
 
     def UCBpuct(self, probability_matrix, actions, s):
-        #s = qubit-matrisen
-        #en annan fråga är ochså hur jag representerar actions här. Vanligtvis brukar detta göras med att man räknar ut alla
-        #Borde hitta nogont set datatyp som låter en göra parallela acions på flera state action pairs samtidigt
-        #Borde också eventuellt hitta ett bättre sätt att representera actions på ett bättre sätt
-        current_Qsa = np.array([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions])
-        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0 for a in opperator_actions] for opperator_actions in actions])
+        current_Qsa = torch.tensor([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions], dtype=torch.float32, device=self.device)
+        current_Nsa = torch.tensor([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0 for a in opperator_actions] for opperator_actions in actions], dtype=torch.float32, device=self.device)
+        
         if s not in self.Ns:
             current_Ns = 0.001
         else:
@@ -84,98 +171,82 @@ class MCTS():
                 current_Ns = 0.001
             else:
                 current_Ns = self.Ns[s]
-        return current_Qsa + self.args.cpuct*probability_matrix*np.sqrt(current_Ns/(1+current_Nsa))
-
-
-    def search(self, current_qubit_state):
         
-        #vet ej om denna behövs:
-        self.toric.qubit_matrix = current_qubit_state
-        self.toric.syndrom('next_state')
+        #använd max Q-värde: (eller använda )
+                
+        return current_Qsa + self.args['cpuct']*probability_matrix*torch.sqrt(torch.tensor(current_Ns, dtype=torch.float32)/(1+current_Nsa))
 
-        s = str(current_qubit_state)
-        if s not in self.Es:
-            if self.toric.terminal_state('next_state') == 1:#then not terminal state
-                self.Es[s] = 0
-            else:
-                if self.toric.eval_ground_sate():
-                    #Trivial loop --> gamestate won!
-                    self.Es[s] = 1 #or the reward 100 i dunno
-                else:
-                    #non trivial loop --> game lost!
-                    self.Es[s] = -1
-        
-        current_Es = self.Es[s]
-        if current_Es != 0:
-            #Backprop?
-            return self.Es[s]
-        array_of_perspectives = self.get_input_perspectives()
-        #gör om från np[Perspective(perspective, position)] --> Perspective([perspective], [position])*
-        perspectives = Perspective(*zip(*array_of_perspectives))
-        input_perspectives = np.array(perspectives.perspective)
-        perspective_pos = np.array(perspectives.position)
-        if s not in self.Ps:
-            #Problem 1
-            #innan denna matas inn i nätvärket behöver denna först konverteras till en torch tensor och stoppas in i decve
-            #sedan autputar nätvärket ochså policyn för detta
-            #Ps ska inte innehålla v!
-            #detta måste vara fel format!
-            '''
-            om output på nnet är [X, Y, Z, v]:
-            out = nnet.feedforward(perspective_input)
-            Ps[s] = [[out[i][j] for j in range(3)] for i in range(len(out))]
-            #genomsnittet av alla v värden för alla perspektiv
-            v = np.sum([out[i][3] for i in range(len(out))])/len(out)
-            '''
-            v, self.Ps[s] = self.nnet.feedforward(input_perspectives)
-            
-            #normalisera
-            self.Ps[s]  = self.Ps[s]/np.sum(self.Ps[s])
 
-            #är nu färdig med episoden
-            self.Ns[s] = 0
-            return v
+    def generate_perspective(self, grid_shift, state):
+        def mod(index, shift):
+            index = (index + shift) % self.system_size 
+            return index
+        perspectives = []
+        vertex_matrix = state[0,:,:]
+        plaquette_matrix = state[1,:,:]
+        # qubit matrix 0
+        for i in range(self.system_size):
+            for j in range(self.system_size):
+                if vertex_matrix[i, j] == 1 or vertex_matrix[mod(i, 1), j] == 1 or \
+                plaquette_matrix[i, j] == 1 or plaquette_matrix[i, mod(j, -1)] == 1:
+                    new_state = np.roll(state, grid_shift-i, axis=1)
+                    new_state = np.roll(new_state, grid_shift-j, axis=2)
+                    temp = Perspective(new_state, (0,i,j))
+                    perspectives.append(temp)
+        # qubit matrix 1
+        for i in range(self.system_size):
+            for j in range(self.system_size):
+                if vertex_matrix[i,j] == 1 or vertex_matrix[i, mod(j, 1)] == 1 or \
+                plaquette_matrix[i,j] == 1 or plaquette_matrix[mod(i, -1), j] == 1:
+                    new_state = np.roll(state, grid_shift-i, axis=1)
+                    new_state = np.roll(new_state, grid_shift-j, axis=2)
+                    new_state = self.rotate_state(new_state) # rotate perspective clock wise
+                    temp = Perspective(new_state, (1,i,j))
+                    perspectives.append(temp)
+        return perspectives
 
-        #positionen blir här en tuple: type(p_pos) = tuple, INTE array!
-        #inneffektivt sätt att göra det på som jag har förstått
-        actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspective_pos]
-        UpperConfidence = self.UCBpuct(self.Ps[s], actions, s)
+    def step(self, action, syndrom, action_matrix):
+        qubit_matrix = action.position[0]
+        row = action.position[1]
+        col = action.position[2]
+        add_opperator = action.action
+        rule_table = np.array(([[0,1,2,3],[1,0,3,2],[2,3,0,1],[3,2,1,0]]), dtype=int)
 
-        
-        #indecies_of_action = delat upp i perspektiv behövs inte
-        perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
-        best_perspective = array_of_perspectives[perspective_index]
+        #Förändrar action matrisen
+        current_state = action_matrix[qubit_matrix][row][col]
+        action_matrix[qubit_matrix][row][col] = rule_table[add_opperator][current_state]
 
-        best_action = Action(np.array(best_perspective.position), action_index+1)
-
-        self.toric.current_state = self.toric.next_state
-
-        #Göra om så att vi ändast behöver ha perspektiv här...
-        a = str(best_action)
-        
-        
-        if (s,a) in self.Nsa:
-            self.Nsa[(s,a)] +=1
-        else:
-            self.Nsa[(s,a)] = 1
-        
-        if s in self.Ns:
-            self.Ns[s]+=1
-        else:
-            self.Ns[s]=1
-
-        self.toric.step(best_action)
-        v = self.search(np.copy(self.toric.qubit_matrix))
-
-        if (s,a) in self.Qsa:
-            self.Qsa[(s,a)] = ((self.Nsa[(s,a)]-1)*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)])
-
-        else:
-            self.Qsa[(s,a)] = v
-        return v
+        #if x or y
+        if add_opperator == 1 or add_opperator ==2:
+            if qubit_matrix == 0:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][row][(col-1)%self.system_size] = (syndrom[0][row][(col-1)%self.system_size]+1)%2
+            elif qubit_matrix == 1:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][(row+1)%self.system_size][col] = (syndrom[0][(row+1)%self.system_size][col]+1)%2
+        #if z or y
+        if add_opperator == 3 or add_opperator ==2:
+            if qubit_matrix == 0:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][(row-1)%self.system_size][col] = (syndrom[0][(row-1)%self.system_size][col]+1)%2
+            elif qubit_matrix == 1:
+                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
+                syndrom[0][row][(col+1)%self.system_size] = (syndrom[0][row][(col+1)%self.system_size]+1)%2
     
-    def expansion(self, curent_qubit_state):
-        pass
-    #backprop händer ej förren man har blivit klar med en episod  --> används ej i alpha go's version av algoritmen
-    def backprop(self):
-        pass
+    def rotate_state(self, state):
+        vertex_matrix = state[0,:,:]
+        plaquette_matrix = state[1,:,:]
+        rot_plaquette_matrix = np.rot90(plaquette_matrix)
+        rot_vertex_matrix = np.rot90(vertex_matrix)
+        rot_vertex_matrix = np.roll(rot_vertex_matrix, 1, axis=0)
+        rot_state = np.stack((rot_vertex_matrix, rot_plaquette_matrix), axis=0)
+        return rot_state
+    
+    def mult_actions(self, action_matrix1, action_matrix2):
+        rule_table = np.array(([[0,1,2,3], [1,0,3,2], [2,3,0,1], [3,2,1,0]]), dtype=int)
+        return [[[rule_table[qu1][qu2] for qu1, qu2 in zip(row1, row2)] for row1, row2 in zip(qu_mat1, qu_mat2)] for qu_mat1, qu_mat2 in zip(action_matrix1, action_matrix2)]
+    
+    def get_possible_actions(self, state):
+        perspectives = self.generate_perspective(self.args['grid_shift'], state)
+        perspectives = Perspective(*zip(*perspectives))
+        return [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position] #bytte ut np.array(p_pos)

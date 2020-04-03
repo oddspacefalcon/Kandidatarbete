@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from random import uniform, randint
 from collections import namedtuple
-from util import Action, Perspective
+from .util import Action, Perspective
 
 
 class Toric_code():

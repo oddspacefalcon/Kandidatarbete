@@ -9,7 +9,7 @@ import time
 
 EPS = 1e-8
 
-class MCTS():
+class MCTS_vector():
 
     def __init__(self, model, device, args, toric_codes=None, syndroms=None):
         self.toric_codes = toric_codes # toric_model object
@@ -53,7 +53,7 @@ class MCTS():
         #self.states = copy.deepcopy(self.syndrom)
 
 
-    def get_probs_action(self, temp=1):
+    def get_Qvals(self, temp=1):
         
         size = self.system_size
         state_string = [str(syndrom) for syndrom in self.syndroms]
@@ -71,13 +71,15 @@ class MCTS():
             self.is_leaf = np.zeros(self.nr_trees, dtype=bool)
         
        #..............................Max Qsa .............................
+        batch_perspectives = [self.generate_perspective(self.args['grid_shift'], state) for state in self.syndroms]
+        batch_perspectives = [Perspective(*zip(*perspectives)).perspective for perspectives in batch_perspectives]
         batch_actions = [self.get_possible_actions(syndrom) for syndrom in self.syndroms]
-        all_Qsa = [np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions]) for actions, s in zip(batch_actions, state_string)]
-        all_Qsa = np.array([np.reshape(Qsa, Qsa.size) for Qsa in all_Qsa])
-        maxQ = [max(Qsa) for Qsa in all_Qsa]
+        all_Qsa = [np.array([[self.Qsa[i][(s,str(a))] if (s,str(a)) in self.Qsa[i] else 0 for a in action] for action in actions]) for actions, s, i in zip(batch_actions, state_string, range(self.nr_trees))]
+        #all_Qsa = np.array([np.reshape(Qsa, Qsa.size) for Qsa in all_Qsa])
+        #maxQ = [max(Qsa) for Qsa in all_Qsa]
 
         #Ger som output de maximala Q-värden till de olika staterna...(varför?)
-        return maxQ
+        return all_Qsa, batch_perspectives, batch_actions
 
     def search(self, all_states, actions_taken):
         
@@ -351,6 +353,20 @@ class MCTS():
         self.Ts[i] = (self.Ts[i]*self.Nrs[i]+t1-t0)/(self.Nrs[i]+1)
         self.Nrs[i]+=1
         return
+
+
+    def next_step(self, actions):
+        for action, i in zip(actions, range(len(actions))):
+            self.toric_codes[i].step(action)
+            self.syndroms[i] = self.toric_codes[i].next_state
+
+    def get_best_indices(self, Qvals):
+        perspective_indices, action_indices = zip(*[np.unravel_index(np.argmax(Qs), Qs.shape) for Qs in Qvals])
+        perspective_indices = np.array(perspective_indices)
+        action_indices = np.array(action_indices)
+        return (perspective_indices, action_indices)
+
+
 
     # Reward
     '''Får skriva om denna så att den tar alla samtidgt '''
