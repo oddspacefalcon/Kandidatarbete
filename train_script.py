@@ -43,7 +43,7 @@ rl = RL(Network=NETWORK,
         discount_factor=0.95,
         max_nbr_actions_per_episode=5,
         device=device,
-        replay_memory='proportional')   # proportional  
+        replay_memory='uniform')   # proportional  
                                         # uniform
 
 
@@ -68,9 +68,8 @@ rl.train_for_n_epochs(training_steps=50,
                     num_of_predictions=1,
                     num_of_steps_prediction=5,
                     epochs=num_epochs,
-                    target_update=10,
                     optimizer='Adam',
-                    batch_size=2,
+                    batch_size=5,
                     directory_path = PATH,
                     prediction_list_p_error=[0.1],
                     replay_start_size=48)

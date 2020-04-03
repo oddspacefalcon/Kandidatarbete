@@ -27,14 +27,13 @@ from .MCTS_vector import MCTS_vector
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
                 number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
-                cpuct=0.5, num_mcts_simulations=20, discount_factor=0.95, nr_trees=10):
+                cpuct=0.5, num_mcts_simulations=20, discount_factor=0.95, nr_memories=5):
 
-        self.nr_trees = nr_trees
         # device
         self.device = device
         # Toric code
         if system_size%2 > 0:
-            self.toric = [Toric_code(system_size) for _ in nr_trees]
+            self.toric = Toric_code(system_size)
         else:
             raise ValueError('Invalid system_size, please use only odd system sizes.')
         self.grid_shift = int(system_size/2)
@@ -44,6 +43,7 @@ class RL():
         # Replay Memory
         self.replay_memory_capacity = replay_memory_capacity
         self.replay_memory = replay_memory
+
         if self.replay_memory == 'proportional':
             self.memory = Replay_memory_prioritized(replay_memory_capacity, 0.6) # alpha
         elif self.replay_memory == 'uniform':
@@ -74,7 +74,7 @@ class RL():
         self.model = torch.load(PATH, map_location='cpu')
         self.model = self.model.to(self.device)
     
-    def experience_replay_vector(self, criterion, optimizer, batch_size):
+    def experience_replay(self, criterion, optimizer, batch_size):
         qval_perspective, weights, indices = self.memory.sample(batch_size, 0.4)
 
         batch_qvals, batch_perspectives = zip(*qval_perspective)
@@ -89,41 +89,6 @@ class RL():
 
         loss.backward()
         optimizer.step()
-
-
-
-
-    def experience_replay(self, criterion, optimizer, batch_size):
-        self.model.train()
-        # get transitions and unpack them to minibatch
-        transitions, weights, indices = self.memory.sample(batch_size, 0.4) # beta parameter 
-        mini_batch = Transition(*zip(*transitions))
-        # unpack action batch
-        batch_actions = Action(*zip(*mini_batch.action))
-        batch_actions = np.array(batch_actions.action) - 1
-        batch_actions = torch.Tensor(batch_actions).long()
-        batch_actions = batch_actions.to(self.device)
-        # preprocess batch_input and batch_target_input for the network
-        batch_state = self.get_batch_input(mini_batch.state)
-        batch_next_state = self.get_batch_input(mini_batch.next_state)
-        # preprocess batch_terminal and batch reward
-        batch_terminal = convert_from_np_to_tensor(np.array(mini_batch.terminal)) 
-        batch_terminal = batch_terminal.to(self.device)
-        batch_reward = convert_from_np_to_tensor(np.array(mini_batch.reward))
-        batch_reward = batch_reward.to(self.device)
-        # compute policy net output
-        output = self.model(batch_state)
-
-        output2 = output.gather(1, batch_actions.view(-1, 1)).squeeze(1)    
-        # compute target network output 
-        mcts_output = self.get_mcts_output(batch_next_state, batch_size)
-        y = batch_reward + (batch_terminal * self.discount_factor * mcts_output)
-        # compute loss and update replay memory
-        loss = self.get_loss(criterion, optimizer, y, output, weights, indices)
-        # backpropagate loss
-        loss.backward()
-        optimizer.step()
-
 
     def get_loss(self, criterion, optimizer, y, output, weights, indices):
         loss = criterion(y, output)
@@ -176,19 +141,17 @@ class RL():
 
             num_of_steps_per_episode = 0
             # initialize syndrom
-            self.toric = [Toric_code(self.system_size) for _ in range(self.nr_trees)]
+            self.toric = Toric_code(self.system_size)
             # generate syndroms
-            terminal_states = np.ones(self.nr_trees)
-            for i in range(self.nr_trees):
-                self.toric[i].generate_random_error(self.p_error)
-                terminal_states[i] = self.toric[i].terminal_state(self.toric.current_state)
+            self.toric.generate_random_error(self.p_error)
+            terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-            mcts = MCTS(self.model, self.device, self.tree_args, toric_codes=self.toric)
+            mcts = MCTS(self.model, self.device, self.tree_args, toric_code=self.toric)
+            self.model.eval()
 
-
-            simulations = [50, 10]
+            simulations = [2, 1]
             # solve one episode
-            while not np.all(terminal_states == 0) and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
+            while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
 
                 start_time = time.time()
                 
@@ -203,30 +166,31 @@ class RL():
                 # select action using epsilon greedy policy
                 
                 Qvals, perspectives, actions = mcts.get_Qvals()
-
                 perspective_index, action_index = mcts.best_index(Qvals)
-                best_actions = actions[perspective_index][action_index] for i, pi, ai in zip(range(self.nr_trees), perspective_indecies, action_indecies)]               
-                mcts.next_step(best_actions)
-
+                best_action = actions[perspective_index][action_index]
                 
+
+
+                mcts.next_step(best_action)
+
+
+                #only put the perspectives that have been visited more than 3 times in the memory buffer
+                Qvals, perspectives = mcts.get_memory_Qvals(Qvals, perspectives, actions, nr_min_visits=3)
                 
                 # save transition in memory
-                #Alt 1: save all Qvals that we get:
-                for Qs_list, perspective_list in zip(Qvals[i], perspectives[i]):
+                for Qs_list, perspective_list in zip(Qvals, perspectives):
                     for Qs, perspective in zip(Qs_list, perspective_list):
                         self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
 
-                #Alt 2: save only the best:
-                #for i, ai, pi in zip
-
-                #Alt 3: Save only the ones that have been visited more than N times:
-
+                
                 # experience replay
                 if steps_counter > replay_start_size:
                     update_counter += 1
-                    self.experience_replay_vector(criterion,
+                    self.model.train()
+                    self.experience_replay(criterion,
                                             optimizer,
                                             batch_size) 
+                    self.model.eval()
 
                 # update epsilon and cpuct
                 if (update_counter % epsilon_cpuct_update == 0):
@@ -235,7 +199,7 @@ class RL():
 
                 # set next_state to new state 
                 
-                terminal_states = [tor.terminal_state(tor.current_state) for tor in self.toric]
+                terminal_state = self.toric.terminal_state(self.toric.next_state)
 
                 print('step time: {0:.3} s'.format(time.time() - start_time))
 

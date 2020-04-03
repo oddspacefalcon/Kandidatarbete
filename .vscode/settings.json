@@ -1,3 +1,7 @@
 {
+<<<<<<< HEAD
     "python.pythonPath": "C:\\ProgramData\\Anaconda3\\python.exe"
+=======
+    "python.linting.enabled": false
+>>>>>>> 9b4c7db3655b36f55422c24a3a9e58e1fdcc9002
 }
