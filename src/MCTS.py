@@ -153,8 +153,8 @@ class MCTS():
 
     def get_reward(self, next_state, current_state):
         #Check if non trivial loop
-        all_zeros = not np.any(state)
-        self.qubit_matrix = state
+        all_zeros = not np.any(next_state)
+        self.qubit_matrix = next_state
         self.eval_ground_state()
         if self.ground_state is False:
             reward = -100
