@@ -1,0 +1,2 @@
+# network, failure_rate, error corrected, ground state conserved, average number of steps, mean q value, number of failed syndroms, runtime (h)
+Size_5_NN_11,0,1,1.0,1.0,3.0,97.884,0.0,0.0015687671634886
