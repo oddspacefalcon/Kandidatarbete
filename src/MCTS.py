@@ -227,16 +227,16 @@ class MCTS():
                 syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
                 syndrom[0][row][(col-1)%self.system_size] = (syndrom[0][row][(col-1)%self.system_size]+1)%2
             elif qubit_matrix == 1:
-                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
-                syndrom[0][(row+1)%self.system_size][col] = (syndrom[0][(row+1)%self.system_size][col]+1)%2
+                syndrom[1][row][col] = (syndrom[1][row][col]+1)%2
+                syndrom[1][(row+1)%self.system_size][col] = (syndrom[1][(row+1)%self.system_size][col]+1)%2
         #if z or y
         if add_opperator == 3 or add_opperator ==2:
             if qubit_matrix == 0:
                 syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
                 syndrom[0][(row-1)%self.system_size][col] = (syndrom[0][(row-1)%self.system_size][col]+1)%2
             elif qubit_matrix == 1:
-                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
-                syndrom[0][row][(col+1)%self.system_size] = (syndrom[0][row][(col+1)%self.system_size]+1)%2
+                syndrom[1][row][col] = (syndrom[1][row][col]+1)%2
+                syndrom[1][row][(col+1)%self.system_size] = (syndrom[1][row][(col+1)%self.system_size]+1)%2
     
     def rotate_state(self, state):
         vertex_matrix = state[0,:,:]
