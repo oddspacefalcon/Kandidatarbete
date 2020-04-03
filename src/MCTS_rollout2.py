@@ -6,12 +6,9 @@ import copy
 import torch
 import random
 import time
-
-
-
 EPS = 1e-8
 
-class MCTS_Rollout():
+class MCTS_rollout2():
 
     def __init__(self, device, args,  Ns, Nsa, Qsa, Wsa, toric_code=None, syndrom=None):
 
@@ -45,6 +42,7 @@ class MCTS_Rollout():
                                    # False: non trivial loop 
         self.states_to_leafnode = []
         self.actions_to_leafnode = []
+        self.reward = 0 #save reward when we go to leaf node
    
 
     def get_maxQsa(self, temp=1):
@@ -60,16 +58,11 @@ class MCTS_Rollout():
             self.search(copy.deepcopy(self.syndrom), actions_taken)
             self.loop_check.clear()
 
-            print(len(self.actions_to_leafnode))
-            print(len(self.states_to_leafnode))
-
             self.states_to_leafnode.clear()
             self.actions_to_leafnode.clear()
-            self.states_to_leafnode.append(s)
-            self.actions_to_leafnode.append(s)
+            self.actions_to_leafnode_nostring.clear()
         
         #print('len actions',len(self.Actions_s[s])*3)
-        
             
        #..............................Max Qsa .............................
 
@@ -80,50 +73,48 @@ class MCTS_Rollout():
         maxQ = (all_Qsa != 0).argmax()
         
         #best action
-        index_max = np.unravel_index((all_Qsa2D != 0).argmax(), all_Qsa2D.shape)
+        index_max = np.unravel_index((all_Qsa2D).argmax(), all_Qsa2D.shape)
         best_action = actions[index_max[0]][index_max[1]]
+        
+        '''
         a = []
+        Nsa = []
         for i in range(len(actions)-1):
             for j in range(3):
-                a.append(actions[i][j])
-        
+                if ((s,str(actions[i][j])) in self.Nsa):
+                    a.append(actions[i][j])      
         counter = 0
         for i in a:
             counter += 1
-            print('----------')
-            print(i)
-            print('Nsa is: ',self.Nsa[(s,str(a[2]))])
-            print('counter = ', counter)
-            
-
-        #print(self.Nsa[(s,all)])
-
+            Nsa.append(self.Nsa[(s,str(i))])
+        index = Nsa.index(max(Nsa))
+        #best_action = a[index]
+        '''
+        
         return maxQ, all_Qsa, best_action, self.Qsa, self.Wsa, self.Nsa, self.Ns
+
 
     def search(self, state, actions_taken):
         with torch.no_grad():
             s = str(state)
             
             #...........................Check if terminal state.............................
-
             #Check if non trivial loop
             self.qubit_matrix = state
             self.eval_ground_state()
             if self.ground_state is False:
-                v = -20
-                print('trivial loop')
+                v = -1000
+                #print('trivial loop')
                 return v
             
             #if no trivial loop check if terminal state
             all_zeros = not np.any(state)
             if all_zeros:   
                 #Trivial loop --> gamestate won!
-                #print('We Won! :)')
                 v = 100
                 return v
     
             #..................Get perspectives and batch for network......................
-            
             perspective_list = self.generate_perspective(self.args['grid_shift'], state)
             number_of_perspectives = len(perspective_list)
             perspectives = Perspective(*zip(*perspective_list))
@@ -131,95 +122,87 @@ class MCTS_Rollout():
             batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
             batch_perspectives = batch_perspectives.to(self.device)
             batch_position_actions = perspectives.position
-         
-             
+
+        
             # ............................If leaf node......................................
-    
             if s not in self.Ns:
-                v = self.rollout(perspective_list, copy.deepcopy(state), actions_taken) 
+                v = self.rollout(perspective_list, copy.deepcopy(state), actions_taken) + self.reward  
                 # If this state has not been visited.
                 self.Ns[s] = 0
+                self.backpropagation(v)
+                return
+            else:
+                #make selection which node to go to
+                self.reward = 0
+                self.selection(s, state, perspectives, perspective_list, actions_taken) 
                 
-                '''
-                #Choose a fix number of random actions to explore -> not all
-                self.Actions_s[s] = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
-                while True:
-                    if len(self.Actions_s[s])*3 > self.args['actions_to_explore']:
-                        del self.Actions_s[s][random.randint(0,len(self.Actions_s[s])-1)] # delete random element in actions
-                    else:
-                        break
-                '''
-                
-                return v
     
-            # ..........................Get best action...................................
-            actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
-            UpperConfidence = self.UCBpuct(actions, s)
-            '''
-            if s not in self.Actions_s:
-                #Choose a fix number of random actions to explore -> not all
-                self.Actions_s[s] = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
-                while True:
-                    if len(self.Actions_s[s])*3 > self.args['actions_to_explore']:
-                        del self.Actions_s[s][random.randint(0,len(self.Actions_s[s])-1)] # delete random element in actions
-                    else:
-                        break
-            
-            UpperConfidence = self.UCBpuct(actions, s)
-            '''
+    def selection(self, s, state, perspectives, perspective_list, actions_taken):
+        
+        #...........................Upper confidence bound...........................
+        actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
+        current_Qsa = np.array([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions])
+        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0 for a in opperator_actions] for opperator_actions in actions])
+        if s not in self.Ns:
+            current_Ns = 1
+        else:
+            if self.Ns[s] == 0:
+                current_Ns = 1
+            else:
+                current_Ns = self.Ns[s]
 
-            #Choose action with higest UCB which has not been explored before
-            while True:
-                perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
-                best_perspective = perspective_list[perspective_index]
-                action = Action(np.array(best_perspective.position), action_index+1)
-    
-                a = str(action)
-                if((s,a) not in self.loop_check):
-                    self.loop_check.add((s,a))
-                    break
-                else:
-                    UpperConfidence[perspective_index][action_index] = -float('inf')
+        UpperConfidence = current_Qsa + self.args['cpuct']*np.sqrt(np.log(current_Ns)/(current_Nsa+EPS))
 
-            #Go one step down the tree with the UCB action
-            #print(UpperConfidence[perspective_index][action_index])
-            #print('----------')
-            self.actions_to_leafnode.append(a)
-            self.states_to_leafnode.append(s)
-            self.step(action, state, actions_taken)
-            self.current_level += 1
-            if self.current_level == 1:
-                self.actions.append(a)
-                
-            #Get value for leaf node
-            v = self.search(state, actions_taken)
-            
-            # ............................BACKPROPAGATION................................
-            
-            
-            i = 0
-            for s in self.states_to_leafnode:
-                a = self.actions_to_leafnode[i]
-                if (s,a) in self.Qsa:
-                    self.Wsa[(s,a)] = self.Wsa[(s,a)] + v  
-                    self.Qsa[(s,a)] = self.Wsa[(s,a)]/self.Nsa[(s,a)]
-                    self.Nsa[(s,a)] += 1
-                else:
-                    self.Wsa[(s,a)] = v
-                    self.Nsa[(s,a)] = 1
-                    self.Qsa[(s,a)] = v #self.Wsa[(s,a)]
-    
-                self.Ns[s] += 1
-                i += 1
-                
-            
-        return v
+        #Choose action with higest UCB which has not been explored before
+        while True:
+            perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
+            best_perspective = perspective_list[perspective_index]
+            action = Action(np.array(best_perspective.position), action_index+1)
+
+            a = str(action)
+            if((s,a) not in self.loop_check):
+                self.loop_check.add((s,a))
+                break
+            else:
+                UpperConfidence[perspective_index][action_index] = -float('inf')
+        
+        #...........................Go down the tree with best action...........................
+        self.states_to_leafnode.append(s)
+        current_state = copy.deepcopy(state)
+        self.step(action, state, actions_taken)
+        next_state = copy.deepcopy(state)
+        reward = self.get_reward(next_state, current_state)
+        self.reward = reward
+        self.actions_to_leafnode.append(a)
+        self.current_level += 1
+        if self.current_level == 1:
+            self.actions.append(a)
+
+        #Search
+        self.search(state, actions_taken)
+
+
+    def backpropagation(self, v):
+        i = 0
+        for s in self.states_to_leafnode:
+            a = self.actions_to_leafnode[i]
+            if (s,a) in self.Qsa:
+                self.Wsa[(s,a)] = self.Wsa[(s,a)] + v  
+                self.Qsa[(s,a)] = self.Wsa[(s,a)]/self.Nsa[(s,a)]
+                self.Nsa[(s,a)] += 1
+            else:
+                self.Wsa[(s,a)] = v
+                self.Nsa[(s,a)] = 1
+                self.Qsa[(s,a)] = self.Wsa[(s,a)]
+            self.Ns[s] += 1
+            i += 1    
+
 
     def rollout(self, perspective_list, state1, actions_taken):
         counter = 0 #number of steps in rollout
         accumulated_reward = 0 
         v = 0
-        discount = 0.9
+        discount = 0.1
         state = copy.deepcopy(state1)
         while True:
             counter += 1
@@ -234,7 +217,7 @@ class MCTS_Rollout():
                 break
 
             # om ej terminal state
-            if all_zeros is False and counter < self.args['rollout_length']:
+            if all_zeros is False and counter <= self.args['rollout_length']:
                 perspective_list = self.generate_perspective(self.args['grid_shift'], state)
                 
                 #get random action
@@ -250,22 +233,16 @@ class MCTS_Rollout():
                 
                 #get reward for step
                 accumulated_reward += self.get_reward(next_state, current_state)
-
-                #if accumulated_reward < 0:
-                   # accumulated_reward = 0
                 
                 # discount factor because want to promote early high rewards
-                v += accumulated_reward #*discount**(counter)
-                #print('----------')
-                #print(v)
-                #print(state)
-                #print('----------')
+                v += accumulated_reward *discount**(counter)
+    
             
             #Break if terminal state
             all_zeros = not np.any(state)
             if all_zeros:
                 v += discount**(counter)*100
-                #print('We Won in rollout! :)')
+                print('We Won in rollout! :)')
                 break
             
             elif counter == self.args['rollout_length']:
@@ -283,21 +260,9 @@ class MCTS_Rollout():
             defects_state = np.sum(current_state)
             defects_next_state = np.sum(next_state)
             reward = defects_state - defects_next_state
+            if reward <= 0:
+                reward = -2
         return reward
-
-    def UCBpuct(self, actions, s):
-
-        current_Qsa = np.array([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions])
-        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0.0001 for a in opperator_actions] for opperator_actions in actions])
-        if s not in self.Ns:
-            current_Ns = 1
-        else:
-            if self.Ns[s] == 0:
-                current_Ns = 1
-            else:
-                current_Ns = self.Ns[s]
-
-        return current_Qsa + self.args['cpuct']*np.sqrt(np.log(current_Ns)/(current_Nsa))
 
 
     def generate_perspective(self, grid_shift, state):
@@ -346,16 +311,16 @@ class MCTS_Rollout():
                 syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
                 syndrom[0][row][(col-1)%self.system_size] = (syndrom[0][row][(col-1)%self.system_size]+1)%2
             elif qubit_matrix == 1:
-                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
-                syndrom[0][(row+1)%self.system_size][col] = (syndrom[0][(row+1)%self.system_size][col]+1)%2
+                syndrom[1][row][col] = (syndrom[1][row][col]+1)%2
+                syndrom[1][(row+1)%self.system_size][col] = (syndrom[1][(row+1)%self.system_size][col]+1)%2
         #if z or y
         if add_opperator == 3 or add_opperator ==2:
             if qubit_matrix == 0:
                 syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
                 syndrom[0][(row-1)%self.system_size][col] = (syndrom[0][(row-1)%self.system_size][col]+1)%2
             elif qubit_matrix == 1:
-                syndrom[0][row][col] = (syndrom[0][row][col]+1)%2
-                syndrom[0][row][(col+1)%self.system_size] = (syndrom[0][row][(col+1)%self.system_size]+1)%2
+                syndrom[1][row][col] = (syndrom[1][row][col]+1)%2
+                syndrom[1][row][(col+1)%self.system_size] = (syndrom[1][row][(col+1)%self.system_size]+1)%2
     
     def rotate_state(self, state):
         vertex_matrix = state[0,:,:]

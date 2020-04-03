@@ -56,23 +56,16 @@ class MCTS():
         
        #..............................Max Qsa .............................
         actions = self.get_possible_actions(self.syndrom)
-        all_Qsa = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
-        all_Qsa = np.reshape(all_Qsa, all_Qsa.size)
-        maxQ = max(all_Qsa)
+        all_Qsa2D = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
+        all_Qsa = np.reshape(all_Qsa2D, all_Qsa2D.size)
+        maxQ = max(all_Qsa != 0 )
         
-        
-        #get best action
-        #maxQ_index = np.where(all_Qsa == maxQ)[0]
-        #pos_index = [(i) for i in range(int(len(all_Qsa)/3)) if maxQ_index[0] <= (i+1)*3 and maxQ_index[0] >=(i)*3]
-        #action_index = [(i+1) for i in range(3) if maxQ_index[0] == (pos_index[0])*3+(i)]
+        #best action
+        index_max = np.unravel_index((all_Qsa2D).argmax(), all_Qsa2D.shape)
+        best_action = actions[index_max[0]][index_max[1]]
+        print(max(self.Qsa, key=self.Qsa.get))
 
-        #best_action = actions[pos_index[0]][action_index[0]]
-        #print(pos_index)
-        #print(action_index)
-        ##print(actions[len(actions)-1][1])
-       # print(actions[0][0])
-
-        return maxQ, all_Qsa
+        return maxQ, all_Qsa, best_action
 
     def search(self, state, actions_taken):
         with torch.no_grad():

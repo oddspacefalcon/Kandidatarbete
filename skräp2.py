@@ -10,7 +10,7 @@ import random
 from numpy import unravel_index
 
 device = 'cpu'
-system_size = 5
+system_size = 3
 toric = Toric_code(system_size)
 toric.generate_random_error(0.12)
 
@@ -54,13 +54,37 @@ actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspec
 #all_actions = np.array([[Action(np.array(position), a) for a in position] for position in actions])
 #all_Qsa = np.reshape(all_Qsa, all_Qsa.size)
 
-print('________________')
+dire = {}
+dire2 = {}
 
-a = np.array([[0,0,-3],[-10,-6,-7]])
-b = [1,2,3,10,6,7]
+dire[('A', 'B')] = 3
+dire[('C', 'D')] = 10
 
-w, h = 3, 2; #2 lists med 3 element i varje
-c = [[0 for x in range(w)] for y in range(h)]
+A = [('A','B'), ('C', 'D')]
+print(A)
 
-index_max = np.unravel_index((a!=0).argmax(), a.shape)
-print(index_max)
+a=[1,2,3,4,5]
+if 6 not in a:
+    print('jdj')
+
+
+
+'''
+#get random action
+perspective_index_rand = random.randint(0,len(perspective_list)-1)
+rand_pos = perspective_list[perspective_index_rand].position
+action_index_rand = random.randint(1,3)
+rand_action = Action(np.array(rand_pos), action_index_rand)
+
+s = str(state)
+a = str(rand_action)
+self.states_to_leafnode.append(s)
+current_state = copy.deepcopy(state)
+#if np.sum(current_state[0]) == 0:
+
+
+self.step(rand_action, state, actions_taken)
+next_state = copy.deepcopy(state)
+self.actions_to_leafnode.append(a)
+self.actions_to_leafnode_nostring.append(rand_action)
+'''
