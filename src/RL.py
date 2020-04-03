@@ -93,36 +93,36 @@ class RL():
 
 
 
-    # def experience_replay(self, criterion, optimizer, batch_size):
-    #     self.model.train()
-    #     # get transitions and unpack them to minibatch
-    #     transitions, weights, indices = self.memory.sample(batch_size, 0.4) # beta parameter 
-    #     mini_batch = Transition(*zip(*transitions))
-    #     # unpack action batch
-    #     batch_actions = Action(*zip(*mini_batch.action))
-    #     batch_actions = np.array(batch_actions.action) - 1
-    #     batch_actions = torch.Tensor(batch_actions).long()
-    #     batch_actions = batch_actions.to(self.device)
-    #     # preprocess batch_input and batch_target_input for the network
-    #     batch_state = self.get_batch_input(mini_batch.state)
-    #     batch_next_state = self.get_batch_input(mini_batch.next_state)
-    #     # preprocess batch_terminal and batch reward
-    #     batch_terminal = convert_from_np_to_tensor(np.array(mini_batch.terminal)) 
-    #     batch_terminal = batch_terminal.to(self.device)
-    #     batch_reward = convert_from_np_to_tensor(np.array(mini_batch.reward))
-    #     batch_reward = batch_reward.to(self.device)
-    #     # compute policy net output
-    #     output = self.model(batch_state)
+    def experience_replay(self, criterion, optimizer, batch_size):
+        self.model.train()
+        # get transitions and unpack them to minibatch
+        transitions, weights, indices = self.memory.sample(batch_size, 0.4) # beta parameter 
+        mini_batch = Transition(*zip(*transitions))
+        # unpack action batch
+        batch_actions = Action(*zip(*mini_batch.action))
+        batch_actions = np.array(batch_actions.action) - 1
+        batch_actions = torch.Tensor(batch_actions).long()
+        batch_actions = batch_actions.to(self.device)
+        # preprocess batch_input and batch_target_input for the network
+        batch_state = self.get_batch_input(mini_batch.state)
+        batch_next_state = self.get_batch_input(mini_batch.next_state)
+        # preprocess batch_terminal and batch reward
+        batch_terminal = convert_from_np_to_tensor(np.array(mini_batch.terminal)) 
+        batch_terminal = batch_terminal.to(self.device)
+        batch_reward = convert_from_np_to_tensor(np.array(mini_batch.reward))
+        batch_reward = batch_reward.to(self.device)
+        # compute policy net output
+        output = self.model(batch_state)
 
-    #     output2 = output.gather(1, batch_actions.view(-1, 1)).squeeze(1)    
-    #     # compute target network output 
-    #     mcts_output = self.get_mcts_output(batch_next_state, batch_size)
-    #     y = batch_reward + (batch_terminal * self.discount_factor * mcts_output)
-    #     # compute loss and update replay memory
-    #     loss = self.get_loss(criterion, optimizer, y, output, weights, indices)
-    #     # backpropagate loss
-    #     loss.backward()
-    #     optimizer.step()
+        output2 = output.gather(1, batch_actions.view(-1, 1)).squeeze(1)    
+        # compute target network output 
+        mcts_output = self.get_mcts_output(batch_next_state, batch_size)
+        y = batch_reward + (batch_terminal * self.discount_factor * mcts_output)
+        # compute loss and update replay memory
+        loss = self.get_loss(criterion, optimizer, y, output, weights, indices)
+        # backpropagate loss
+        loss.backward()
+        optimizer.step()
 
 
     def get_loss(self, criterion, optimizer, y, output, weights, indices):
@@ -183,7 +183,7 @@ class RL():
                 self.toric[i].generate_random_error(self.p_error)
                 terminal_states[i] = self.toric[i].terminal_state(self.toric.current_state)
 
-            mcts_vector = MCTS_vector(self.model, self.device, self.tree_args, toric_codes=self.toric)
+            mcts = MCTS(self.model, self.device, self.tree_args, toric_codes=self.toric)
 
 
             simulations = [50, 10]
@@ -199,23 +199,22 @@ class RL():
                 steps_counter += 1
                 iteration += 1
 
-                mcts_vector.args['num_simulations']  = simulations[simulation_index]
+                mcts.args['num_simulations']  = simulations[simulation_index]
                 # select action using epsilon greedy policy
                 
-                Qvals, perspectives, actions = mcts_vector.get_Qvals()
+                Qvals, perspectives, actions = mcts.get_Qvals()
 
-                perspective_indecies, action_indecies = mcts_vector.get_best_indices(Qvals)
-                best_actions = [actions[i][pi][ai] for i, pi, ai in zip(range(self.nr_trees), perspective_indecies, action_indecies)]               
-                mcts_vector.next_step(best_actions)
+                perspective_index, action_index = mcts.best_index(Qvals)
+                best_actions = actions[perspective_index][action_index] for i, pi, ai in zip(range(self.nr_trees), perspective_indecies, action_indecies)]               
+                mcts.next_step(best_actions)
 
                 
                 
                 # save transition in memory
                 #Alt 1: save all Qvals that we get:
-                for i in range(self.nr_trees):
-                    for Qs_list, perspective_list in zip(Qvals[i], perspectives[i]):
-                        for Qs, perspective in zip(Qs_list, perspective_list):
-                            self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
+                for Qs_list, perspective_list in zip(Qvals[i], perspectives[i]):
+                    for Qs, perspective in zip(Qs_list, perspective_list):
+                        self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
 
                 #Alt 2: save only the best:
                 #for i, ai, pi in zip
