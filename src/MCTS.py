@@ -45,7 +45,6 @@ class MCTS():
         #.............................Search...............................
 
         for i in range(self.args['num_simulations']):
-            print("sim nr: {}".format(i+1))
             self.search(copy.deepcopy(self.syndrom), actions_taken)
             self.loop_check.clear()
         

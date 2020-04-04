@@ -79,9 +79,12 @@ class RL():
 
         batch_qvals, batch_perspectives = zip(*qval_perspective)
         batch_qvals = np.array(batch_qvals)
+        batch_qvals = convert_from_np_to_tensor(batch_qvals)
+        batch_qvals = batch_qvals.to(self.device)
 
         batch_perspectives = np.array(batch_perspectives)
-        batch_perspectives = np.convert_from_np_to_tensor(batch_perspectives).to(self.device)
+        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+        batch_perspectives = batch_perspectives.to(self.device)
 
         output = self.model.forward(batch_perspectives)
 
@@ -115,7 +118,7 @@ class RL():
 
 
     def train(self, epochs, training_steps=int, optimizer=str, batch_size=int, replay_start_size=int, reach_final_epsilon_cpuct=0.5,
-              epsilon_start=1.0, num_of_epsilon_steps=10, epsilon_end=0.1,  cpuct_start=50, cpuct_end=0.1, num_of_epsilon_cpuct_steps=10):
+              epsilon_start=1.0, num_of_epsilon_steps=10, epsilon_end=0.1,  cpuct_start=20, cpuct_end=0.1, num_of_epsilon_cpuct_steps=10):
         criterion = nn.MSELoss(reduction='none')
         # define criterion and optimizer
         if optimizer == 'RMSprop':
@@ -135,7 +138,7 @@ class RL():
         cpuct_decay =  np.round((cpuct_start-cpuct_end)/num_of_epsilon_cpuct_steps, 5)
         epsilon_cpuct_update = num_of_steps * reach_final_epsilon_cpuct
 
-        # main loop over training steps 
+        # main loop over training steps
         while iteration < training_steps:
             
 
@@ -149,11 +152,10 @@ class RL():
             mcts = MCTS(self.model, self.device, self.tree_args, toric_code=self.toric)
             self.model.eval()
 
-            simulations = [2, 1]
+            simulations = [100, 10]
             # solve one episode
+            
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
-
-                start_time = time.time()
                 
                 simulation_index = num_of_steps_per_episode if num_of_steps_per_episode < len(simulations) else len(simulations)-1
 
@@ -169,18 +171,17 @@ class RL():
                 perspective_index, action_index = mcts.best_index(Qvals)
                 best_action = actions[perspective_index][action_index]
                 
-
+                #only put the perspectives that have been visited more than 1 time in the memory buffer
+                Qvals, perspectives = mcts.get_memory_Qvals(Qvals, perspectives, actions, nr_min_visits=1)
 
                 mcts.next_step(best_action)
 
 
-                #only put the perspectives that have been visited more than 3 times in the memory buffer
-                Qvals, perspectives = mcts.get_memory_Qvals(Qvals, perspectives, actions, nr_min_visits=3)
+                
                 
                 # save transition in memory
-                for Qs_list, perspective_list in zip(Qvals, perspectives):
-                    for Qs, perspective in zip(Qs_list, perspective_list):
-                        self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
+                for Qs, perspective in zip(Qvals, perspectives):
+                    self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
 
                 
                 # experience replay
@@ -200,8 +201,6 @@ class RL():
                 # set next_state to new state 
                 
                 terminal_state = self.toric.terminal_state(self.toric.next_state)
-
-                print('step time: {0:.3} s'.format(time.time() - start_time))
 
             
 
