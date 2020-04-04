@@ -21,7 +21,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #   ResNet50
 #   ResNet101
 #   ResNet152
-NETWORK = ResNet18
+NETWORK = NN_17
 
 # common system sizes are 3,5,7 and 9 
 # grid size must be odd! 
@@ -31,8 +31,7 @@ SYSTEM_SIZE = 5
 continue_training = False
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'size_5_ResNet18'
- 
+NETWORK_FILE_NAME = 'size_5_NN_17'
 
 # initialize RL class and training parameters 
 rl = RL(Network=NETWORK,
@@ -42,12 +41,10 @@ rl = RL(Network=NETWORK,
         replay_memory_capacity=20000, 
         learning_rate=0.00025,
         discount_factor=0.95,
-        max_nbr_actions_per_episode=5,
+        max_nbr_actions_per_episode=30,
         device=device,
-        replay_memory='proportional',
-        num_MCTS_sim = 10,
-        cpuct = 50)     
-                                        
+        replay_memory='uniform')   # proportional  
+                                        # uniform
 
 
 # generate folder structure 
@@ -71,12 +68,11 @@ rl.train_for_n_epochs(training_steps=50,
                     num_of_predictions=1,
                     num_of_steps_prediction=5,
                     epochs=num_epochs,
-                    target_update=10,
                     optimizer='Adam',
-                    batch_size=1,
+                    batch_size=2,
                     directory_path = PATH,
                     prediction_list_p_error=[0.1],
-                    replay_start_size=32)
+                    replay_start_size=48)
 
 
 """ rl.train_for_n_epochs(training_steps=10000,
@@ -88,3 +84,4 @@ rl.train_for_n_epochs(training_steps=50,
                             directory_path = PATH,
                             prediction_list_p_error=[0.1],
                             minimum_nbr_of_qubit_errors=0)   """
+               

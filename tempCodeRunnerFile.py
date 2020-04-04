@@ -1,1 +1,1 @@
-print(rand_pos)
+toric_code.current_state

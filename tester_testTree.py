@@ -76,7 +76,6 @@ def firstMCTS(state):
     print('sum diff: ', add1-add2)
     print('total errors', add2)
     
-    
     return next_state
  
 def loopMCTS(state, max_moves, winn, losss, Asav, Wsa):

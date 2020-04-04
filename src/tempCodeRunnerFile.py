@@ -1,2 +1,3 @@
-sum_Ps_s = torch.sum(self.Ps[s]) 
-self.Ps[s] = self.Ps[s]/sum_Ps_s 
+        self.states_to_leafnode = []
+        self.actions_to_leafnode = []
+        self.actions_to_leafnode_nostring = []
