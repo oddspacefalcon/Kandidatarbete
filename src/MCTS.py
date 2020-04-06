@@ -6,6 +6,7 @@ import copy
 import torch
 import random
 EPS = 1e-8
+import time
 
 class MCTS():
 
@@ -13,7 +14,7 @@ class MCTS():
         self.toric_code = toric_code # toric_model object
 
         if(toric_code == None):
-            if(syndrom == None):
+            if(syndrom is None):
                 raise ValueError("Invalid imput: toric_code or syndrom cannot both have a None value")
             else:
                 self.syndrom = syndrom
@@ -34,6 +35,9 @@ class MCTS():
         self.system_size = self.syndrom.shape[1]
         self.next_state = []
         self.current_state = []
+
+        self.Ts = np.zeros(5)
+        self.Nrs = np.zeros(5)
 
 
     def get_Qvals(self, temp=1):
@@ -77,6 +81,7 @@ class MCTS():
 
     def search(self, state, actions_taken):
         # np.arrays unhashable, needs string
+        t0 = time.clock()
         s = str(state)
 
         #..................Get perspectives and batch for network......................
@@ -89,6 +94,7 @@ class MCTS():
         batch_perspectives = batch_perspectives.to(self.device)
         batch_position_actions = perspectives.position
 
+        
         #...........................Check if terminal state.............................
 
         if np.all(state == 0):
@@ -100,7 +106,10 @@ class MCTS():
                 return -1
 
         # ............................If leaf node......................................
+        self.Ts[0] = (self.Ts[0]*self.Nrs[0]+time.clock()-t0)/(self.Nrs[0]+1)
+        self.Nrs[0] += 1
 
+        t0 = time.clock()
         if s not in self.Ps:
             # leaf node => expand
             with torch.no_grad():
@@ -115,29 +124,39 @@ class MCTS():
             self.Ns[s] = 0
             return v
 
+        self.Ts[1] = (self.Ts[1]*self.Nrs[1]+time.clock()-t0)/(self.Nrs[1]+1)
+        self.Nrs[1] += 1
         # ..........................Get best action...................................
-
+        t0 = time.clock()
         #Göra använda numpy för att göra UBC kalkyleringen snabbare.
         actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
         UpperConfidence = self.UCBpuct(self.Ps[s], actions, s)
 
+        self.Ts[2] = (self.Ts[2]*self.Nrs[2]+time.clock()-t0)/(self.Nrs[2]+1)
+        self.Nrs[2] += 1
         #Väljer ut action med högst UCB som inte har valts tidigare (i denna staten):
+        t0 = time.clock()
         while True:
-            perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
+            t0 = time.clock()
+            maxindex = np.argmax(UpperConfidence)
+            self.Ts[3] = (self.Ts[3]*self.Nrs[3]+time.clock()-t0)/(self.Nrs[3]+1)
+            self.Nrs[3] += 1
+            perspective_index, action_index = np.unravel_index(maxindex, UpperConfidence.shape)
+            
             best_perspective = perspective_list[perspective_index]
 
             action = Action(np.array(best_perspective.position), action_index+1) #bytte ut np.array(best_perspective.position)
             
 
             a = str(action)
-            if((s,a) not in self.loop_check):
-                self.loop_check.add((s,a))
+            if(a not in self.loop_check):
+                self.loop_check.add(a)
                 break
             else:
                 UpperConfidence[perspective_index][action_index] = -float('inf')
     
-        
         #går ett steg framåt
+        
         self.step(action, state, actions_taken)
         self.current_level += 1
         if self.current_level == 1:
@@ -145,18 +164,19 @@ class MCTS():
             
         
         #kollar igenom nästa state
+        
         v = self.search(state, actions_taken)
-
+        
         #går tilbaka med samma steg och finn rewards
         self.next_state = copy.deepcopy(state)
+        
         self.step(action, state, actions_taken)
         self.current_level -= 1
         self.current_state = copy.deepcopy(state)
-        
         #Obs 0.3*reward pga annars blir denna för dominant -> om negativ -> ibland negativt Qsa
         self.reward = 0.3*self.get_reward(self.next_state,self.current_state, actions_taken)
         
-
+        
         # ............................BACKPROPAGATION................................
 
         if (s,a) in self.Qsa:
@@ -173,11 +193,15 @@ class MCTS():
             self.Nsa[(s,a)] = 1
 
         self.Ns[s] += 1
+
+        
         return v
 
     # Reward
     def get_reward(self, next_state, current_state, action_matrix):
-        terminal = np.all(next_state==0)
+        
+        terminal = np.count_nonzero(next_state)==0
+        
         if terminal == True:
             if self.toric_code != None:
                 state = self.mult_actions(self.toric_code.qubit_matrix, action_matrix)
@@ -188,11 +212,16 @@ class MCTS():
             else:
                 reward = 100
             #print('Reward = ', reward)
+            
  
         else:
+            
+            t0 = time.clock()
             defects_state = np.sum(current_state)
             defects_next_state = np.sum(next_state)
             reward = defects_state - defects_next_state
+            self.Ts[4] = (self.Ts[4]*self.Nrs[4]+time.clock()-t0)/(self.Nrs[4]+1)
+            self.Nrs[4] += 1
             #print('Reward = ', reward)
         return reward
 

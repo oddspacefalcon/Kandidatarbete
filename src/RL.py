@@ -156,6 +156,7 @@ class RL():
             # solve one episode
             
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
+                print("iteration: {}".format(iteration))
                 
                 simulation_index = num_of_steps_per_episode if num_of_steps_per_episode < len(simulations) else len(simulations)-1
 
@@ -247,10 +248,11 @@ class RL():
         return step            
 
 
-    def select_action_prediction(self):
-        mcts = MCTS(deepcopy(self.model), self.device, self.tree_args, toric_codes=deepcopy(self.toric))
-        _, action = mcts.get_qs_actions()
-        return action
+    def select_action_prediction(self, mcts):
+        Qvals, perspectives, actions = mcts.get_Qvals()
+        perspective_index, action_index = mcts.best_index(Qvals)
+        best_action = actions[perspective_index][action_index]
+        return best_action
 
 
     def prediction(self, num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH=None, plot_one_episode=False, cpuct=0.0,
@@ -290,13 +292,16 @@ class RL():
                     self.toric.plot_toric_code(self.toric.current_state, 'initial_syndrom')
                 
                 init_qubit_state = deepcopy(self.toric.qubit_matrix)
+
+                mcts = MCTS(self.model, self.device, self.tree_args, syndrom=self.toric.current_state)
+
                 # solve syndrome
                 while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                     steps_counter += 1
                     num_of_steps_per_episode += 1
                     # choose greedy action
 
-                    action = self.select_action_prediction()
+                    action = self.select_action_prediction(mcts)
                     
                     prev_action = action
                     self.toric.step(action)
@@ -304,6 +309,7 @@ class RL():
                     terminal_state = self.toric.terminal_state(self.toric.current_state)
                     if plot_one_episode == True and j == 0 and i == 0:
                         self.toric.plot_toric_code(self.toric.current_state, 'step_'+str(num_of_steps_per_episode))
+                    mcts.
 
                 # compute mean steps 
                 mean_steps_per_p_error = incremental_mean(num_of_steps_per_episode, mean_steps_per_p_error, j+1)
@@ -333,12 +339,14 @@ class RL():
         data_all = np.zeros((1, 15))
 
         for i in range(epochs):
+            t0 = time.clock()
             self.train(training_steps=training_steps,
                     optimizer=optimizer,
                     batch_size=batch_size,
                     replay_start_size=replay_start_size,
                     epochs=epochs)
             print('training done, epoch: ', i+1)
+            print('time taken: {}'.format(time.clock()-t0))
             # evaluate network
             error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, epsilon=0.0, cpuct=0.0,
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error,                                                                                                                                                                        save_prediction=True,
