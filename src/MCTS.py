@@ -36,29 +36,23 @@ class MCTS():
         self.next_state = []
         self.current_state = []
 
-        self.Ts = np.zeros(5)
-        self.Nrs = np.zeros(5)
-
 
     def get_Qvals(self, temp=1):
 
         size = self.system_size
-        s = str(self.syndrom)
+        s = self.syndrom.tostring()
         actions_taken = np.zeros((2,size,size), dtype=int)
 
         #.............................Search...............................
-
         for i in range(self.args['num_simulations']):
             self.search(copy.deepcopy(self.syndrom), actions_taken)
             self.loop_check.clear()
-        
        #.............................. Return Q_vals and corresponding actions and perspectives .............................
         actions = self.get_possible_actions(self.syndrom)
         perspectives = self.generate_perspective(self.args['grid_shift'], self.syndrom)
         perspectives = Perspective(*zip(*perspectives)).perspective
 
-        all_Qsa = np.array([[self.target_Qsa[(s,str(a))] if (s,str(a)) in self.target_Qsa else 0 for a in position] for position in actions])
-        
+        all_Qsa = self.target_Qsa[s]
         return (all_Qsa, perspectives, actions)
 
     #Takes in all the Qvalues and the corresponding perspectives and actions
@@ -79,26 +73,22 @@ class MCTS():
         return (new_Qval, new_perspectives)
             
 
+    #MCTS:
     def search(self, state, actions_taken):
         # np.arrays unhashable, needs string
-        t0 = time.clock()
-        s = str(state)
+        
+        s = state.tostring()
 
         #..................Get perspectives and batch for network......................
 
-        perspective_list = self.generate_perspective(self.args['grid_shift'], state)
-        number_of_perspectives = len(perspective_list)
-        perspectives = Perspective(*zip(*perspective_list))
-        batch_perspectives = np.array(perspectives.perspective)
-        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-        batch_perspectives = batch_perspectives.to(self.device)
-        batch_position_actions = perspectives.position
+        perspective_pos_list = self.generate_perspective_pos(state)
+        number_of_perspectives = perspective_pos_list.shape[0]
 
         
         #...........................Check if terminal state.............................
 
         if np.all(state == 0):
-            if state.eval_ground_state(): #ska det vara self.toric.eval_ground_state(): här istället?
+            if self.eval_ground_state(state): #ska det vara self.toric.eval_ground_state(): här istället?
                 #Trivial loop --> gamestate won!
                 return 1
             else:
@@ -106,103 +96,109 @@ class MCTS():
                 return -1
 
         # ............................If leaf node......................................
-        self.Ts[0] = (self.Ts[0]*self.Nrs[0]+time.clock()-t0)/(self.Nrs[0]+1)
-        self.Nrs[0] += 1
 
-        t0 = time.clock()
+
+        
         if s not in self.Ps:
+            perspective_list = self.generate_perspective(self.args['grid_shift'], state)
+            number_of_perspectives = len(perspective_list)
+            perspectives = Perspective(*zip(*perspective_list))
+            batch_perspectives = np.array(perspectives.perspective)
+            batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+            batch_perspectives = batch_perspectives.to(self.device)
+            batch_position_actions = perspectives.position
+
             # leaf node => expand
             with torch.no_grad():
-                self.Ps[s] = self.model.forward(batch_perspectives) 
-            v = torch.max(self.Ps[s])
+                Qvals = self.model.forward(batch_perspectives) 
+            v = torch.max(Qvals)
             v = v.data.numpy()
             # Normalisera
-            sum_Ps_s = torch.sum(self.Ps[s]) 
-            self.Ps[s] = self.Ps[s]/sum_Ps_s    
+            sum_Qs_s = torch.sum(Qvals) 
+            
+            self.Ps[s] = (Qvals/sum_Qs_s).detach().numpy()    
                 
             # ej besökt detta state tidigare sätter dessa parametrar till 0
             self.Ns[s] = 0
             return v
+        
 
-        self.Ts[1] = (self.Ts[1]*self.Nrs[1]+time.clock()-t0)/(self.Nrs[1]+1)
-        self.Nrs[1] += 1
+
+        
         # ..........................Get best action...................................
-        t0 = time.clock()
         #Göra använda numpy för att göra UBC kalkyleringen snabbare.
-        actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
-        UpperConfidence = self.UCBpuct(self.Ps[s], actions, s)
+        UpperConfidence = self.UCBpuct(self.Ps[s], s)
 
-        self.Ts[2] = (self.Ts[2]*self.Nrs[2]+time.clock()-t0)/(self.Nrs[2]+1)
-        self.Nrs[2] += 1
         #Väljer ut action med högst UCB som inte har valts tidigare (i denna staten):
-        t0 = time.clock()
+        
         while True:
-            t0 = time.clock()
-            maxindex = np.argmax(UpperConfidence)
-            self.Ts[3] = (self.Ts[3]*self.Nrs[3]+time.clock()-t0)/(self.Nrs[3]+1)
-            self.Nrs[3] += 1
-            perspective_index, action_index = np.unravel_index(maxindex, UpperConfidence.shape)
+            perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
             
-            best_perspective = perspective_list[perspective_index]
+            best_perspective_pos= perspective_pos_list[perspective_index]
 
-            action = Action(np.array(best_perspective.position), action_index+1) #bytte ut np.array(best_perspective.position)
+            action = Action(np.array(best_perspective_pos), action_index+1) #bytte ut np.array(best_perspective.position)
             
-
-            a = str(action)
+            
+            a = best_perspective_pos.tostring()
             if(a not in self.loop_check):
                 self.loop_check.add(a)
                 break
             else:
                 UpperConfidence[perspective_index][action_index] = -float('inf')
-    
+        
+        
         #går ett steg framåt
         
         self.step(action, state, actions_taken)
         self.current_level += 1
-        if self.current_level == 1:
-            self.actions.append(a)
-            
         
+
         #kollar igenom nästa state
-        
         v = self.search(state, actions_taken)
+        
         
         #går tilbaka med samma steg och finn rewards
         self.next_state = copy.deepcopy(state)
-        
         self.step(action, state, actions_taken)
+        
+        
         self.current_level -= 1
-        self.current_state = copy.deepcopy(state)
+        self.current_state = state
+        
         #Obs 0.3*reward pga annars blir denna för dominant -> om negativ -> ibland negativt Qsa
         self.reward = 0.3*self.get_reward(self.next_state,self.current_state, actions_taken)
         
         
         # ............................BACKPROPAGATION................................
 
-        if (s,a) in self.Qsa:
-            
-            self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + self.reward + self.args['discount_factor']*v)/(self.Nsa[(s,a)]+1)
+        ai = action_index
+        pi = perspective_index
+
+        if s in self.Qsa:
+            self.Qsa[s][pi][ai] = (self.Nsa[s][pi][ai]*self.Qsa[s][pi][ai] + self.reward + self.args['discount_factor']*v)/(self.Nsa[s][pi][ai]+1)
             new_Qval = self.reward/0.3 + self.args['discount_factor']*v
-            self.target_Qsa[(s,a)] = new_Qval if new_Qval > self.target_Qsa[(s,a)] else self.target_Qsa[(s,a)]
+            self.target_Qsa[s][pi][ai] = new_Qval if new_Qval > self.target_Qsa[s][pi][ai] else self.target_Qsa[s][pi][ai]
             #print('Qsa: ',self.Qsa[(s,a)])
             #print('reward:', self.reward)
-            self.Nsa[(s,a)] += 1
+            self.Nsa[s][pi][ai] += 1
         else:
-            self.Qsa[(s,a)] = v
-            self.target_Qsa[(s,a)] = v
-            self.Nsa[(s,a)] = 1
+            self.Qsa[s] = np.zeros((number_of_perspectives, 3))
+            self.Qsa[s][pi][ai] = v
+            self.target_Qsa[s] = np.zeros((number_of_perspectives, 3))
+            self.target_Qsa[s][pi][ai] = v
+            self.Nsa[s] = np.zeros((number_of_perspectives, 3))
+            self.Nsa[s][pi][ai] = 1
 
         self.Ns[s] += 1
 
-        
+
         return v
+
 
     # Reward
     def get_reward(self, next_state, current_state, action_matrix):
-        
-        terminal = np.count_nonzero(next_state)==0
-        
-        if terminal == True:
+        defects_next_state = np.count_nonzero(next_state)
+        if defects_next_state==0:
             if self.toric_code != None:
                 state = self.mult_actions(self.toric_code.qubit_matrix, action_matrix)
                 if self.toric_code.eval_ground_state():
@@ -215,14 +211,10 @@ class MCTS():
             
  
         else:
-            
-            t0 = time.clock()
-            defects_state = np.sum(current_state)
-            defects_next_state = np.sum(next_state)
+            defects_state = np.count_nonzero(current_state)
             reward = defects_state - defects_next_state
-            self.Ts[4] = (self.Ts[4]*self.Nrs[4]+time.clock()-t0)/(self.Nrs[4]+1)
-            self.Nrs[4] += 1
             #print('Reward = ', reward)
+        
         return reward
 
     def best_index(self, Qvals):
@@ -232,10 +224,9 @@ class MCTS():
         self.toric_code.step(action)
         self.syndrom = self.toric_code.next_state
 
-    def UCBpuct(self, probability_matrix, actions, s):
-
-        current_Qsa = np.array([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions])
-        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0 for a in opperator_actions] for opperator_actions in actions])
+    def UCBpuct(self, prob_matrix, s):
+        current_Qsa = self.Qsa[s] if s in self.Qsa else np.zeros(prob_matrix.shape)
+        current_Nsa = self.Nsa[s] if s in self.Nsa else np.zeros(prob_matrix.shape)
         if s not in self.Ns:
             current_Ns = 0.001
         else:
@@ -244,7 +235,7 @@ class MCTS():
             else:
                 current_Ns = self.Ns[s]
         #använd max Q-värde: (eller använda )
-        return current_Qsa + self.args['cpuct']*probability_matrix.detach().numpy()*np.sqrt(current_Ns/(1+current_Nsa))
+        return current_Qsa + self.args['cpuct']*prob_matrix*np.sqrt(current_Ns/(1+current_Nsa))
 
 
     def generate_perspective(self, grid_shift, state):
@@ -275,6 +266,16 @@ class MCTS():
                     perspectives.append(temp)
         
         return perspectives
+    
+    def generate_perspective_pos(self, state):
+        vertex_matrix = state[0,:,:]
+        plaquette_matrix = state[1,:,:]
+        qubit_mask = np.zeros(state.shape, dtype=bool)
+        qubit_mask[0,:,:] = (plaquette_matrix == 1) | (vertex_matrix == 1) | (np.roll(vertex_matrix, -1, axis=0) == 1) | (np.roll(plaquette_matrix, 1, axis=1) == 1)
+        qubit_mask[1,:,:] = (plaquette_matrix == 1) | (vertex_matrix == 1) | (np.roll(vertex_matrix, -1, axis=1) == 1) | (np.roll(plaquette_matrix, 1, axis=0) == 1)
+        perspective_pos = np.where(qubit_mask)
+        return np.array([*zip(*perspective_pos)])
+    
 
     def step(self, action, syndrom, action_matrix):
         qubit_matrix = action.position[0]
@@ -321,3 +322,6 @@ class MCTS():
         perspectives = self.generate_perspective(self.args['grid_shift'], state)
         perspectives = Perspective(*zip(*perspectives))
         return [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position] #bytte ut np.array(p_pos)
+
+    def eval_ground_state(self, state):
+        return True
