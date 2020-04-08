@@ -41,7 +41,7 @@ rl = RL(Network=NETWORK,
         replay_memory_capacity=20000, 
         learning_rate=0.00025,
         discount_factor=0.95,
-        max_nbr_actions_per_episode=30,
+        max_nbr_actions_per_episode=20,
         device=device,
         replay_memory='uniform')   # proportional  
                                         # uniform
@@ -64,15 +64,15 @@ if continue_training == True:
 num_epochs = 1
 
 # train for n epochs the agent (test parameters)
-rl.train_for_n_epochs(training_steps=1,
+rl.train_for_n_epochs(training_steps=20,
                     num_of_predictions=1,
-                    num_of_steps_prediction=5,
+                    num_of_steps_prediction=3,
                     epochs=num_epochs,
                     optimizer='Adam',
-                    batch_size=2,
+                    batch_size=6,
                     directory_path = PATH,
                     prediction_list_p_error=[0.1],
-                    replay_start_size=48)
+                    replay_start_size=5)
 
 
 """ rl.train_for_n_epochs(training_steps=10000,

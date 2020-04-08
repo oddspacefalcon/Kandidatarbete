@@ -35,12 +35,13 @@ class MCTS():
         self.system_size = self.syndrom.shape[1]
         self.next_state = []
         self.current_state = []
-
+        self.myS = ""
 
     def get_Qvals(self, temp=1):
 
         size = self.system_size
         s = self.syndrom.tostring()
+        self.myS = s
         actions_taken = np.zeros((2,size,size), dtype=int)
 
         #.............................Search...............................
@@ -61,12 +62,10 @@ class MCTS():
         new_Qval = []
         new_perspectives = []
 
-        s = str(self.syndrom)
+        s = self.syndrom.tostring()
 
         for i, list_action in zip(range(len(Qvals)), actions):
-            nr_visit_sum = 0
-            for action in list_action:
-                nr_visit_sum += self.Nsa[(s, str(action))] if (s,str(action)) in self.Nsa else 0
+            nr_visit_sum = np.sum(self.Nsa[s][i])
             if nr_visit_sum >= nr_min_visits:
                 new_Qval.append(Qvals[i])
                 new_perspectives.append(perspectives[i])
@@ -173,6 +172,10 @@ class MCTS():
 
         ai = action_index
         pi = perspective_index
+        if(self.current_level==0 and self.myS != s):
+            print("not same S!\nmyS: {0}\ns: {1}".format(self.myS, s))
+        else:
+            print("same S")
 
         if s in self.Qsa:
             self.Qsa[s][pi][ai] = (self.Nsa[s][pi][ai]*self.Qsa[s][pi][ai] + self.reward + self.args['discount_factor']*v)/(self.Nsa[s][pi][ai]+1)

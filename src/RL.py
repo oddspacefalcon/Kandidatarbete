@@ -64,7 +64,7 @@ class RL():
         self.discount_factor = discount_factor
         # hyperparameters MCTS
         self.tree_args = {'cpuct': cpuct, 'num_simulations':num_mcts_simulations, 'grid_shift': self.grid_shift, 'discount_factor': self.discount_factor}
-
+        self.nr_vals = 0
 
     def save_network(self, PATH):
         torch.save(self.model, PATH)
@@ -137,7 +137,6 @@ class RL():
         epsilon_decay = np.round((epsilon_start-epsilon_end)/num_of_epsilon_cpuct_steps, 5)
         cpuct_decay =  np.round((cpuct_start-cpuct_end)/num_of_epsilon_cpuct_steps, 5)
         epsilon_cpuct_update = num_of_steps * reach_final_epsilon_cpuct
-
         # main loop over training steps
         while iteration < training_steps:
             
@@ -152,7 +151,7 @@ class RL():
             mcts = MCTS(self.model, self.device, self.tree_args, toric_code=self.toric)
             self.model.eval()
 
-            simulations = [100, 10]
+            simulations = [2, 2]
             # solve one episode
             
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
@@ -183,11 +182,13 @@ class RL():
                 # save transition in memory
                 for Qs, perspective in zip(Qvals, perspectives):
                     self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
+                    self.nr_vals+=1
 
                 
                 # experience replay
                 if steps_counter > replay_start_size:
                     update_counter += 1
+                    print("number of training values: {}".format(self.nr_vals))
                     self.model.train()
                     self.experience_replay(criterion,
                                             optimizer,
@@ -196,7 +197,6 @@ class RL():
 
                 # update epsilon and cpuct
                 if (update_counter % epsilon_cpuct_update == 0):
-                    epsilon = np.round(np.maximum(epsilon - epsilon_decay, epsilon_end), 3)
                     self.tree_args['cpuct'] = np.round(np.maximum(self.tree_args['cpuct'] - cpuct_decay, cpuct_end), 3)         
 
                 # set next_state to new state 
@@ -309,7 +309,6 @@ class RL():
                     terminal_state = self.toric.terminal_state(self.toric.current_state)
                     if plot_one_episode == True and j == 0 and i == 0:
                         self.toric.plot_toric_code(self.toric.current_state, 'step_'+str(num_of_steps_per_episode))
-                    mcts.
 
                 # compute mean steps 
                 mean_steps_per_p_error = incremental_mean(num_of_steps_per_episode, mean_steps_per_p_error, j+1)
@@ -334,7 +333,7 @@ class RL():
 
     def train_for_n_epochs(self, training_steps=int, epochs=int, num_of_predictions=100, num_of_steps_prediction=50, 
         optimizer=str, save=True, directory_path='network', prediction_list_p_error=[0.1],
-        batch_size=32, replay_start_size=32):
+        batch_size=32, replay_start_size=1):
         
         data_all = np.zeros((1, 15))
 
