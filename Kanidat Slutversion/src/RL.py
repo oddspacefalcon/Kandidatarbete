@@ -21,7 +21,6 @@ from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from .util import incremental_mean, convert_from_np_to_tensor, Transition, Action, Qval_Perspective
 from .MCTS import MCTS
-from .TestTree import TestTree
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,

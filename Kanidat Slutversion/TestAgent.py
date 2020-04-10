@@ -5,12 +5,8 @@ import torch
 import copy
 import _pickle as cPickle
 from src.RL import RL
-from src.TesterTree3 import TesterTree3
-from src.TestTree2 import TestTree2
-from src.TestTree import TestTree
 
 from src.MCTS_Rollout import MCTS_Rollout
-from src.MCTS_Rollout2 import MCTS_Rollout2
 
 from src.toric_model import Toric_code
 from src.toric_model import Action
@@ -20,8 +16,8 @@ from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from src.util import incremental_mean, convert_from_np_to_tensor, Transition, Action, Qval_Perspective
 
-
 ##########################################################################
+
 def load_network(PATH):
     model = torch.load(PATH, map_location='cpu')
     model = model.to(device)
@@ -117,8 +113,7 @@ def get_possible_actions(state, grid_shift):
     perspectives = Perspective(*zip(*perspectives))
     return [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
 
-
-def prediction(num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH=None, plot_one_episode=False, cpuct=0.0,
+def predictionAgent(num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH=None, plot_one_episode=False, cpuct=0.0,
     show_network=False, show_plot=False, prediction_list_p_error=float, minimum_nbr_of_qubit_errors=0, print_Q_values=False, save_prediction=False,
     system_size=3):
 
@@ -236,14 +231,8 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
             while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                 steps_counter += 1
                 num_of_steps_per_episode += 1
+
                 # choose MCTS action
-             
-                #mcts = TestTree('cpu', args, None, toric.current_state) #Double MCTS
-                #_, action = mcts.get_Qvals()
-
-                #mcts = TestTree('cpu', args, copy.deepcopy(toric), None) #random rollout MCTS
-                #action = mcts.get_Qvals()
-
                 mcts = MCTS_Rollout('cpu', args, copy.deepcopy(toric), None) #Classic rollout MCTS 
                 action = mcts.get_qs_actions()
                 
@@ -266,7 +255,7 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 if plot_one_episode == True and j == 0 and i == 0:
                    
                     toric.plot_toric_code(toric.current_state, 'step_'+str(num_of_steps_per_episode))
-                time.sleep(10)
+                #time.sleep(10)
 
             # compute mean steps 
             mean_steps_per_p_error = incremental_mean(num_of_steps_per_episode, mean_steps_per_p_error, j+1)
@@ -288,27 +277,28 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 
     return error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error
 
-device = 'cuda'
-num_of_predictions = 1
+
+
+############################### TESTING ###############################
+# d = 5, P_error = 0.1, disscount_backprop = 0.9, num_sim = 50
+# d = 7, P_error = 0.1, disscount_backprop = 0.9, num_sim = 70
+# d = 9, P_error = 0.1, disscount_backprop = 0.9, num_sim = 90
+
 system_size = 5
-grid_shift = system_size//2
-prediction_list_p_error = [0.01]
+P_error = 0.1 
+disscount_backprop = 0.9 # OK
+num_sim = 50  #50
+num_of_predictions = 100
+######################################################################
+
+cpuct = np.sqrt(2) #OK
+reward_multiplier = 100
+device = 'cuda' #OK
+grid_shift = system_size//2 #OK
+prediction_list_p_error = [P_error] #OK
 minimum_nbr_of_qubit_errors = int(system_size/2)+1
-
-P_error = 0.01
-
-# Ok till sista d = 5
-# d = 5, disscount_rollout = 0.75, num_sim_long = 100, rollout = 4, cpuct = 3, reward_multiplier = 3.5
-
-disscount_rollout = 0.5 # 0.75
-num_sim_long = 600  #50
-rollout = 4
-cpuct = 2
-reward_multiplier = 1
-
-
-args = {'cpuct': cpuct, 'num_simulations':num_sim_long, 'grid_shift': system_size//2, 'discount_factor':disscount_rollout, \
-    'rollout_length':rollout, 'reward_multiplier':reward_multiplier}
+args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': system_size//2, 'discount_factor':disscount_backprop, \
+    'reward_multiplier':reward_multiplier}
 
 error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = predictionMCTS(
     args = args,
@@ -319,86 +309,7 @@ error_corrected_list, ground_state_list, average_number_of_steps_list, failed_sy
     plot_one_episode=True,
     system_size = system_size)
 
-
 print(error_corrected_list, 'error corrected')
 print(ground_state_list, 'ground state conserved')
 print(average_number_of_steps_list, 'average number of steps')
-#print(failed_syndroms, 'failed syndroms')
-
-
-
-'''
-error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = prediction(
-    num_of_predictions=num_of_predictions, 
-    num_of_steps=75, 
-    PATH=PATH, 
-    prediction_list_p_error=prediction_list_p_error,
-    minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
-    plot_one_episode=True,
-    system_size = system_size)
-'''
-
-'''
-#............................Load network...........................
-# Valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
-network = NN_17
-# This file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'Size_5_NN_11'
-# Path for the network to use for the prediction
-PATH = 'network/'+str(NETWORK_FILE_NAME)+'.pt'
-agent = load_network(PATH)
-'''
-
-'''
-#............................Generate errors...........................
-# initial syndrome error generation 
-# generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.1]
-p_error = 0.1
-# generate syndrome with a fixed amount of errors 
-minimum_nbr_of_qubit_errors = 1 #int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
-
-toric = Toric_code(system_size)
-if minimum_nbr_of_qubit_errors == 0:
-    toric.generate_random_error(p_error)
-else:
-    toric.generate_n_random_errors(minimum_nbr_of_qubit_errors)
-terminal_state = toric.terminal_state(toric.current_state)
-#init_qubit_state = copy.deepcopy(toric.qubit_matrix)
-
-def loopMCTS(state):
-    counter = 0
-    while True:
-        counter += 1
-        all_zeros = not np.any(state)
-        if all_zeros:
-            print('We Wooooon!!! ', state)
-            win = 1
-            break
-        #............................Get best action from network...........................
-        # Get Q-table
-        q_values_table, best_action = select_action_prediction(agent, state, grid_shift)
-        # Get action corresponding to max(Q)
-        print('_____________________________')
-        print('_____________________________')
-        
-        #print(q_values_table)
-        current_state = copy.deepcopy(state)
-        step(best_action, state)
-        next_state = copy.deepcopy(state)
-        print(current_state)
-        print('-----------')
-        print(best_action)
-        print(next_state)
-        add1 = np.sum(current_state)
-        add2 = np.sum(next_state)
-        print('sum diff: ', add1-add2)
-        print('total errors left', add2)
-        time.sleep(3)
-    
-    return
-
-state = copy.deepcopy(toric.current_state)
-loopMCTS(state)
-'''
 

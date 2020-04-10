@@ -62,9 +62,10 @@ class MCTS_Rollout():
        
         
         for i in range(self.args['num_simulations']):
-            print('__________________')
-            print('__________________')
-            print('Root layer:', self.layer, ' Sim nr:', i)
+            #print('__________________')
+            #print('__________________')
+            #print('Root layer:', self.layer, ' Sim nr:', i)
+            #print('Sim nr:', i)
 
             self.counter = i + 1
             self.search(copy.deepcopy(self.syndrom), actions_taken, str(copy.deepcopy(self.syndrom)), copy.deepcopy(self.toric_code))
@@ -74,25 +75,6 @@ class MCTS_Rollout():
             self.actions_to_leafnode.clear()
             self.actions_to_leafnode_nostring.clear()
         
-       #..............................Max Qsa .............................
-        '''
-        actions = self.get_possible_actions(self.syndrom)
-        temp = 0
-        tot = 0 
-        for i in range(len(actions)):
-            for j in range(3):
-                if (s,str(actions[i][j])) in self.Nsa:
-                    print('Nsa:', self.Nsa[(s,str(actions[i][j]))], 'Qsa:', self.Qsa[(s,str(actions[i][j]))], ' Action: ', str(actions[i][j]))
-                    if temp <= self.Nsa[(s,str(actions[i][j]))]:
-                        temp = self.Nsa[(s,str(actions[i][j]))]
-                        best_action = actions[i][j]
-                        tot += self.Nsa[(s,str(actions[i][j]))]
-                else:
-                     print('Nsa:',0)
-
-        print('Tot Nsa', tot)
-        '''
-
         #..............................Max Qsa .............................
         actions = self.get_possible_actions(self.syndrom)
         all_Qsa = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
@@ -109,16 +91,6 @@ class MCTS_Rollout():
         index_max = np.where(all_Qsa==temp)
         index_max = (index_max[0][0], index_max[1][0])
         best_action = actions[index_max[0]][index_max[1]]
-        print(index_max)
-        #print(all_Nsa)
-        print(all_Qsa)
-        print(all_Qsa[index_max[0]][index_max[1]])
-        print(all_Nsa)
-        #print(self.Qsa)
-        #all_Nsa = [[self.Nsa[(s,str(a))] if (s,str(a)) in self.Nsa else 0 for a in position] for position in actions]
-        #print(sum(sum(all_Nsa,[])) )
-        print(best_action)
-
 
         return best_action
 
@@ -126,26 +98,30 @@ class MCTS_Rollout():
     def search(self, state, actions_taken, root_state, toric_code):
         with torch.no_grad():
             s = str(toric_code.current_state)
+            if self.layer == 1 or self.layer == 0:
+                reward_multiplier = self.args['reward_multiplier']
+            else:
+                reward_multiplier = 2
             
             #...........................Check if terminal state.............................
             #if no trivial loop check if terminal state
             terminal_state = toric_code.terminal_state(toric_code.current_state)
-            toric_code.eval_ground_state()
-            if terminal_state == 0 and toric_code.ground_state == True:
-                print('......Backprop WE WON.......')
-                self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
-                self.states_to_leafnode = list(reversed(self.states_to_leafnode))
-                v = 100
-                self.backpropagation(v)
-                return 
-            elif terminal_state == 0 and toric_code.ground_state == False:
-                print('......Backprop WE LOST.......')
-                self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
-                self.states_to_leafnode = list(reversed(self.states_to_leafnode))
-                v = -100
-                self.backpropagation(v)
+            if terminal_state == 0:
+                toric_code.eval_ground_state()
+                if toric_code.ground_state == True:
+                    #print('......Backprop WE WON.......')
+                    self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
+                    self.states_to_leafnode = list(reversed(self.states_to_leafnode))
+                    v = 100*reward_multiplier
+                    self.backpropagation(v)
+                elif toric_code.ground_state == False:
+                    #print('......Backprop WE LOST.......')
+                    self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
+                    self.states_to_leafnode = list(reversed(self.states_to_leafnode))
+                    v = -100*reward_multiplier
+                    self.backpropagation(v)
                 return
-                
+            
             #............................Get perspectives ......................
             perspective_list = self.generate_perspective(self.args['grid_shift'], toric_code.current_state)
             perspectives = Perspective(*zip(*perspective_list))
@@ -153,14 +129,15 @@ class MCTS_Rollout():
             # ............................If leaf node......................................
             if s not in self.Ns:
                 self.Ns[s] = 0
-                #v = self.rollout(perspective_list, copy.deepcopy(toric_code), actions_taken) + self.reward*self.args['reward_multiplier']
-                v = self.reward*self.args['reward_multiplier']
 
-                print('_______')
-                print('Leaf node at layer:',self.layer, ' --> Reward v:', self.reward)
+                v_from_rollout = self.rollout(perspective_list, copy.deepcopy(toric_code), actions_taken)
+                v = v_from_rollout + self.reward*reward_multiplier
+
+                #print('_______')
+                #print('Leaf node at layer:',self.layer, ' --> Reward from rollout', v_from_rollout, 'Reward from move:', self.reward*reward_multiplier)
                 #print('Leaf node at layer:',self.layer, ' --> v from rollout =',v, 'Reward added to v:', self.reward)
                 if s != root_state:
-                    print('......Backprop.......')
+                    #print('......Backprop.......')
                     self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
                     self.states_to_leafnode = list(reversed(self.states_to_leafnode))
                     self.backpropagation(v)
@@ -201,14 +178,7 @@ class MCTS_Rollout():
                 break
             else:
                 UpperConfidence[perspective_index][action_index] = -float('inf')
-        
-        unique, counts = np.unique(UpperConfidence, return_counts=True)
-        unique_dict = dict(zip(unique, counts))
-        length_unique_dict = len(unique_dict)
-        if (len(UpperConfidence[0])*len(UpperConfidence)) != length_unique_dict:
-            action = self.take_random_step(toric_code, actions_taken)
-        
-
+  
         #...........................Go down the tree with best action...........................
         a = str(action)
         current_state = copy.deepcopy(toric_code.current_state)
@@ -217,12 +187,14 @@ class MCTS_Rollout():
         next_state = copy.deepcopy(toric_code.current_state)
         reward = self.get_reward(next_state, current_state, toric_code)
         
+        '''
         print('---->--->---->---->---->---')
         self.layer += 1
         if (s,a) in self.Qsa:
             print('Layer nr:', self.layer, ' Qsa:',self.Qsa[(s,a)], ' Nsa:',self.Nsa[(s,a)], ' ',action, 'Reward for move:',reward, 'L',self.layer,'R',reward)
         else:
             print('Layer nr:', self.layer, ' ',action, 'Reward for move:',reward)
+        '''
 
         self.reward = reward
         self.actions_to_leafnode.append(a)
@@ -255,7 +227,7 @@ class MCTS_Rollout():
             self.Ns[s] += 1
             i += 1
             self.layer -= 1
-            print('Layer:',self.layer+1,'->',self.layer,' Qsa', Qsa1,'->',Qsa2, '  ',a)   
+            #print('Layer:',self.layer+1,'->',self.layer,' Qsa', Qsa1,'->',Qsa2, '  ',a)   
 
     def take_random_step(self, toric_code, actions_taken):
         perspective_list = self.generate_perspective(self.args['grid_shift'], toric_code.current_state)
@@ -267,64 +239,33 @@ class MCTS_Rollout():
         return rand_action
 
     def rollout(self, perspective_list, toric_code, actions_taken):
-        accumulated_reward = 0 
-        v = 0
-        discount = self.args['discount_factor']
-
-        counter = 0 # For rollout longer then 1
-        while True:
-            counter += 1
-
-            #if no trivial loop check if terminal state
-            terminal_state = toric_code.terminal_state(toric_code.current_state)
-            toric_code.eval_ground_state()
-            if terminal_state == 0 and toric_code.ground_state == True:
-                v = 100*discount**counter
-                break
-            elif terminal_state == 0 and toric_code.ground_state == False:
-                v = -100*discount**counter
-                break
-
-            # om ej terminal state
-            if terminal_state == 1 and counter <= self.args['rollout_length']:
-                perspective_list = self.generate_perspective(self.args['grid_shift'], toric_code.current_state)
-                s = str(toric_code.current_state)
-                rand_action = self.take_random_step(toric_code, actions_taken)
-                a = str(rand_action)
-
-                current_state = copy.deepcopy(toric_code.current_state)
-                toric_code.step(rand_action)
-                toric_code.current_state = toric_code.next_state 
-                next_state = copy.deepcopy(toric_code.current_state)
-
-                #get reward for step
-                accumulated_reward += self.get_reward(next_state, current_state, toric_code)*discount**(counter)
+        # get reward for every possible action from leaf node           
+        actions = self.get_possible_actions(self.syndrom)
+        reward = []
+        for i in range(len(actions)):
+            for j in actions[i]:   
+                toric = copy.deepcopy(toric_code)
+                current_state = copy.deepcopy(toric.current_state)
+                toric.step(j)
+                toric.current_state = toric.next_state 
+                next_state = copy.deepcopy(toric.current_state)
                 
-                # discount factor because want to promote early high rewards
-                v = accumulated_reward 
-    
-            #Break if terminal state
-            terminal_state = toric_code.terminal_state(toric_code.current_state)
-            toric_code.eval_ground_state()
-            if terminal_state == 0 and toric_code.ground_state == True:
-                v = 100*discount**counter
-                break
-            elif terminal_state == 0 and toric_code.ground_state == False:
-                v = -100*discount**counter
-                break
+                v = self.get_reward(next_state, current_state, toric)
+                reward.append(v)
+        v = max(reward) #sum(reward)/len(reward)
 
-            if counter == self.args['rollout_length']:
-                break
         return v
 
     def get_reward(self, next_state, current_state, toric_code):
         #if no trivial loop check if terminal state
+        terminal_state = toric_code.terminal_state(current_state)
         terminal_state = toric_code.terminal_state(toric_code.current_state)
-        toric_code.eval_ground_state()
-        if terminal_state == 0 and toric_code.ground_state == True:
-            reward = 100
-        elif terminal_state == 0 and toric_code.ground_state == False:
-            reward = -100
+        if terminal_state == 0:
+            toric_code.eval_ground_state()
+            if toric_code.ground_state == True:
+                reward = 100
+            elif toric_code.ground_state == False:
+                reward = -100
         else:
             defects_state = np.sum(current_state)
             defects_next_state = np.sum(next_state)
