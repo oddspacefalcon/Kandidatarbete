@@ -6,11 +6,12 @@ import copy
 import torch
 import random
 import time
+from .TestTree2 import TestTree2
 EPS = 1e-8
 
 class TestTree():
 
-    def __init__(self, device, args, Asav, Wsa, toric_code=None, syndrom=None):
+    def __init__(self, device, args,Asav, Wsa, toric_code=None, syndrom=None):
 
         self.toric_code = toric_code # toric_model object
 
@@ -26,8 +27,8 @@ class TestTree():
         self.Qsa = {}      # stores Q values for s,a (as defined in the paper)
         self.Nsa = {}        # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
-        self.Wsa = Wsa         # stores total value policy for node
-        self.Asav = Asav      # stores (s,a,v) for that branch as key  and the action as value. 
+        self.Wsa = {}#Wsa         # stores total value policy for node
+        self.Asav = {}#Asav      # stores (s,a,v) for that branch as key  and the action as value. 
         self.Actions_s = {}
         self.device = device # 'cpu' or 'cuda'
         self.actions = []
@@ -68,8 +69,7 @@ class TestTree():
            
        #..............................Max Qsa .............................
         # Borde fixa vad som händer om trivial loop -> returnera inte någon max q eller best action.
-           
-        #print(max(self.Wsa, key=self.Wsa.get))
+
         Ws_temp = {}
         action_temp = {}
         for key, value in self.Wsa.items():
@@ -83,7 +83,7 @@ class TestTree():
         maxQ = Ws_temp[(key)] 
         #del self.Asav[str(key[0]), str(key[1]), max_value]
         #del self.Wsa[(key)]
-              
+ 
         return maxQ, best_action, self.Asav, self.Wsa
 
     def search(self, state, actions_taken, perspective_list):
@@ -136,12 +136,13 @@ class TestTree():
             
                 self.Qsa[(s,a)] = self.Wsa[(s,a)]
             i += 1 
-            
+
+
     def rollout(self, perspective_list, state1, actions_taken):
         counter = 0 #number of steps in rollout
         accumulated_reward = 0 
         v = 0
-        discount = 0.5
+        discount = self.args['discount_factor']
         state = copy.deepcopy(state1)
         while True:
             counter += 1
@@ -151,10 +152,11 @@ class TestTree():
             self.qubit_matrix = state
             self.eval_ground_state()
             if self.ground_state is False:
-                reward = -100
+                self.reward = -100
                 print('Non trivial loop :(')
                 break
 
+            
             # om ej terminal state
             if all_zeros is False and counter <= self.args['rollout_length']:
                 perspective_list = self.generate_perspective(self.args['grid_shift'], state)
@@ -162,37 +164,34 @@ class TestTree():
                 s = str(state)
                 self.states_to_leafnode.append(s)
                 current_state = copy.deepcopy(state)
+
+                args = {'num_simulations':self.args['second_MCTS'], 'grid_shift': self.system_size//2, 'discount_factor':0.5, 'rollout_length':self.args['second_MCTS_rollout']}
+                test_tree = TestTree2(self.device, args, None, current_state)
+                rand_action = test_tree.get_maxQsa()
                 
-                # only action in qubitmatrix 1 if qubitmatrix all zeros in 0 
-                if np.sum(current_state[0]) == 0:
-                    pos_matrix_1 = []
-                    for i in perspective_list:
-                        if i.position[0] == 1:
-                            pos_matrix_1.append(i.position)
-                    perspective_index_rand = random.randint(0,len(pos_matrix_1)-1)
-                    rand_pos = pos_matrix_1[perspective_index_rand]
-                    action_index_rand = random.randint(1,3)
-                    rand_action = Action(np.array(rand_pos), action_index_rand) 
 
-                elif np.sum(current_state[1]) == 0:                
-                    # only action in qubitmatrix 0 if qubitmatrix all zeros in 1
-                    pos_matrix_0 = []
-                    #samlar perspektiven i matrix 0 i en array
-                    for i in perspective_list:
-                        if i.position[0] == 0:
-                            pos_matrix_0.append(i.position)
-                    perspective_index_rand = random.randint(0,len(pos_matrix_0)-1)
-                    rand_pos = pos_matrix_0[perspective_index_rand] 
-                    action_index_rand = random.randint(1,3)  
-                    rand_action = Action(np.array(rand_pos), action_index_rand)
+                '''
+                temp_reward = 0
+                for i in range(200):
+                    if temp_reward == 2:
+                        continue
+                    rand_action_temp = self.take_random_step(current_state, perspective_list)
+                    state_temp = copy.deepcopy(state)
+                    actions_taken_temp = actions_taken
+                    current_state_temp = copy.deepcopy(state)
+                    self.step(rand_action_temp, state_temp, actions_taken_temp)
+                    next_state_temp = copy.deepcopy(state_temp)
 
-                else:
-                    #get random action from both matrices
-                    perspective_index_rand = random.randint(0,len(perspective_list)-1)
-                    rand_pos = perspective_list[perspective_index_rand].position
-                    action_index_rand = random.randint(1,3)
-                    rand_action = Action(np.array(rand_pos), action_index_rand)
-    
+                    temp_reward = self.get_reward(next_state_temp, current_state_temp)
+                    if temp_reward == 2:
+                        rand_action = rand_action_temp
+                        continue
+                    elif temp_reward == 0:
+                        rand_action = rand_action_temp
+                        continue
+                    rand_action = rand_action_temp
+                '''
+                
                 a = str(rand_action)
                 self.step(rand_action, state, actions_taken)
                 next_state = copy.deepcopy(state)
@@ -200,7 +199,10 @@ class TestTree():
                 self.actions_to_leafnode_nostring.append(rand_action)
                 
                 #get reward for step
-                accumulated_reward += self.get_reward(next_state, current_state)*discount**(counter)
+                reward = self.get_reward(next_state, current_state)
+                if reward == 0:
+                    reward = -2
+                accumulated_reward += reward*discount**(counter)
                 
                 # discount factor because want to promote early high rewards
                 v = accumulated_reward *discount**(counter)
@@ -211,11 +213,44 @@ class TestTree():
                 v += 100
                 #print('We Won in rollout! :)')
                 break
-            
             elif counter == self.args['rollout_length']:
                 break
  
         return v
+    
+    def take_random_step(self, current_state, perspective_list):
+         # only action in qubitmatrix 1 if qubitmatrix all zeros in 0 
+        if np.sum(current_state[0]) == 0:
+            pos_matrix_1 = []
+            for i in perspective_list:
+                if i.position[0] == 1:
+                    pos_matrix_1.append(i.position)
+            perspective_index_rand = random.randint(0,len(pos_matrix_1)-1)
+            rand_pos = pos_matrix_1[perspective_index_rand]
+            action_index_rand = random.randint(1,3)
+            rand_action = Action(np.array(rand_pos), action_index_rand) 
+
+        elif np.sum(current_state[1]) == 0:                
+            # only action in qubitmatrix 0 if qubitmatrix all zeros in 1
+            pos_matrix_0 = []
+            #samlar perspektiven i matrix 0 i en array
+            for i in perspective_list:
+                if i.position[0] == 0:
+                    pos_matrix_0.append(i.position)
+            perspective_index_rand = random.randint(0,len(pos_matrix_0)-1)
+            rand_pos = pos_matrix_0[perspective_index_rand] 
+            action_index_rand = random.randint(1,3)  
+            rand_action = Action(np.array(rand_pos), action_index_rand)
+
+        else:
+            #get random action from both matrices
+            perspective_index_rand = random.randint(0,len(perspective_list)-1)
+            rand_pos = perspective_list[perspective_index_rand].position
+            action_index_rand = random.randint(1,3)
+            rand_action = Action(np.array(rand_pos), action_index_rand)
+
+        return rand_action
+                
         
     def get_reward(self, next_state, current_state):
         terminal = np.all(next_state==0)
@@ -226,8 +261,6 @@ class TestTree():
             defects_state = np.sum(current_state)
             defects_next_state = np.sum(next_state)
             reward = defects_state - defects_next_state
-            if reward == 0:
-                reward = -2
 
         return reward
 

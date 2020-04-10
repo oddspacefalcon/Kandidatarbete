@@ -94,10 +94,10 @@ class MCTS():
         if np.all(state == 0):
             if state.eval_ground_state(): #ska det vara self.toric.eval_ground_state(): här istället?
                 #Trivial loop --> gamestate won!
-                return 1
+                return 100
             else:
                 #non trivial loop --> game lost!
-                return -1
+                return -100
 
         # ............................If leaf node......................................
 

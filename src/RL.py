@@ -21,12 +21,12 @@ from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from .util import incremental_mean, convert_from_np_to_tensor, Transition, Action, Qval_Perspective
 from .MCTS import MCTS
-
+from .TestTree import TestTree
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
                 number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
-                cpuct=0.5, num_mcts_simulations=20, discount_factor=0.95, nr_memories=5):
+                cpuct=0.5, num_mcts_simulations=50, discount_factor=0.95, nr_memories=5):
 
         # device
         self.device = device
@@ -148,7 +148,7 @@ class RL():
             self.toric.generate_random_error(self.p_error)
             terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-            mcts = MCTS(self.model, self.device, self.tree_args, toric_code=self.toric)
+            mcts = TestTree(self.model, self.device, self.tree_args, toric_code=self.toric)
             self.model.eval()
 
             simulations = [100, 10]
@@ -166,7 +166,7 @@ class RL():
                 mcts.args['num_simulations']  = simulations[simulation_index]
                 # select action using epsilon greedy policy
                 
-                Qvals, perspectives, actions = mcts.get_Qvals()
+                Qvals, perspectives, actions = mcts.get_maxQsa()
                 perspective_index, action_index = mcts.best_index(Qvals)
                 best_action = actions[perspective_index][action_index]
                 
@@ -247,7 +247,7 @@ class RL():
 
 
     def select_action_prediction(self):
-        mcts = MCTS(deepcopy(self.model), self.device, self.tree_args, toric_codes=deepcopy(self.toric))
+        mcts = TestTree(deepcopy(self.model), self.device, self.tree_args, deepcopy(self.toric))
         _, action = mcts.get_qs_actions()
         return action
 
@@ -355,3 +355,4 @@ class RL():
             self.save_network(PATH)
             
         return error_corrected_list
+

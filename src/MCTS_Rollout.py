@@ -71,13 +71,19 @@ class MCTS_Rollout():
             #..................Get perspectives and batch for network......................
 
             perspective_list = self.generate_perspective(self.args['grid_shift'], state)
-            perspectives = Perspective(*zip(*perspective_list))
-            batch_perspectives = np.array(perspectives.perspective)
-            batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-            batch_perspectives = batch_perspectives.to(self.device)
-            batch_position_actions = perspectives.position
 
             #...........................Check if terminal state.............................
+
+            all_zeros = not np.any(state)
+            self.qubit_matrix = state
+            self.eval_ground_state()
+            if self.ground_state is False:
+                reward = -100
+                print('Non trivial loop :(')
+                return -100
+            elif all_zeros:
+                print('We Won! :)')
+                return 100
 
             if np.all(state == 0):
                 if state.eval_ground_state(): #ska det vara self.toric.eval_ground_state(): här istället?
@@ -95,9 +101,9 @@ class MCTS_Rollout():
                 # ej besökt detta state tidigare sätter dessa parametrar till 0
                 self.Ns[s] = 0
                 return v
-
+            '''
             # ..........................Get best action...................................
-
+    
             #Göra använda numpy för att göra UBC kalkyleringen snabbare.
             
             actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
@@ -120,6 +126,11 @@ class MCTS_Rollout():
                     break
                 else:
                     UpperConfidence[perspective_index][action_index] = -float('inf')
+            '''
+
+            #..........................Take random step...................................
+            action = self.take_random_step(copy.deepcopy(state), actions_taken)
+            a = str(action)
         
             #går ett steg framåt
             self.step(action, state, actions_taken)                
@@ -134,7 +145,6 @@ class MCTS_Rollout():
             
             #Obs 0.3*reward pga annars blir denna för dominant -> om negativ -> ibland negativt Qsa
             self.reward = self.get_reward(self.next_state,self.current_state)
-    
             
             # ............................BACKPROPAGATION................................
 
@@ -149,6 +159,44 @@ class MCTS_Rollout():
 
             self.Ns[s] += 1
         return v 
+    
+    def take_random_step(self, state1, actions_taken):
+        state = copy.deepcopy(state1)
+        perspective_list = self.generate_perspective(self.args['grid_shift'], state)
+        s = str(state)
+        current_state = copy.deepcopy(state)
+
+        # only action in qubitmatrix 1 if qubitmatrix all zeros in 0 
+        if np.sum(current_state[0]) == 0:
+            pos_matrix_1 = []
+            for i in perspective_list:
+                if i.position[0] == 1:
+                    pos_matrix_1.append(i.position)
+            perspective_index_rand = random.randint(0,len(pos_matrix_1)-1)
+            rand_pos = pos_matrix_1[perspective_index_rand]
+            action_index_rand = random.randint(1,3)
+            rand_action = Action(np.array(rand_pos), action_index_rand) 
+        
+        elif np.sum(current_state[1]) == 0:     # only action in qubitmatrix 0 if qubitmatrix all zeros in 1           
+            pos_matrix_0 = []
+            #samlar perspektiven i matrix 0 i en array
+            for i in perspective_list:
+                if i.position[0] == 0:
+                    pos_matrix_0.append(i.position)
+            perspective_index_rand = random.randint(0,len(pos_matrix_0)-1)
+            rand_pos = pos_matrix_0[perspective_index_rand] 
+            action_index_rand = random.randint(1,3)  
+            rand_action = Action(np.array(rand_pos), action_index_rand) 
+        
+        else: #get random action from both matrices
+            perspective_index_rand = random.randint(0,len(perspective_list)-1)
+            rand_pos = perspective_list[perspective_index_rand].position
+            action_index_rand = random.randint(1,3)
+            rand_action = Action(np.array(rand_pos), action_index_rand)
+
+        return rand_action
+
+
 
     def rollout(self, perspective_list, state1, actions_taken):
         counter = 0 #number of steps in rollout

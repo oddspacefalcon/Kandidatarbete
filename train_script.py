@@ -25,7 +25,7 @@ NETWORK = NN_17
 
 # common system sizes are 3,5,7 and 9 
 # grid size must be odd! 
-SYSTEM_SIZE = 5
+SYSTEM_SIZE = 3
 
 # For continuing the training of an agent
 continue_training = False
@@ -37,7 +37,7 @@ NETWORK_FILE_NAME = 'size_5_NN_17'
 rl = RL(Network=NETWORK,
         Network_name=NETWORK_FILE_NAME,
         system_size=SYSTEM_SIZE,
-        p_error=0.1,
+        p_error=0.3,
         replay_memory_capacity=20000, 
         learning_rate=0.00025,
         discount_factor=0.95,
