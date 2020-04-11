@@ -65,13 +65,18 @@ class RL():
         self.Nr_epoch = 0
         # hyperparameters MCTS
         
-        # Currently for system size = 3
+        
+        ########################################## Set Parameters ##########################################            
+        # d = 3, disscount_backprop = 0.9, num_sim = 50, cpuct = np.sqrt(2),            
+        # d = 5, disscount_backprop = 0.9, num_sim = 70, cpuct = np.sqrt(2)              
+        # d = 9, disscount_backprop = 0.9, num_sim = 110, cpuct = np.sqrt(2)
         disscount_backprop = 0.9 # OK
         num_sim = 50  #50
         cpuct = np.sqrt(2) #OK
         reward_multiplier = 100
         self.tree_args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': self.system_size//2, 'discount_factor':disscount_backprop, \
             'reward_multiplier':reward_multiplier}
+        #####################################################################################################
 
     def save_network(self, PATH):
         torch.save(self.model, PATH)
