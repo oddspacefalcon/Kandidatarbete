@@ -13,14 +13,14 @@ class Toric_code():
         self.qubit_matrix = np.zeros((2, self.system_size, self.system_size), dtype=int)
         self.current_state = np.stack((self.vertex_matrix, self.plaquette_matrix,), axis=0)
         self.next_state = np.stack((self.vertex_matrix, self.plaquette_matrix), axis=0)
-        self.last_state = np.stack((self.vertex_matrix, self.plaquette_matrix), axis=0)
         self.ground_state = True    # True: only trivial loops, 
                                     # False: non trivial loop 
         self.rule_table = np.array(([[0,1,2,3],[1,0,3,2],[2,3,0,1],[3,2,1,0]]), dtype=int)  # Identity = 0
                                                                                             # pauli_x = 1
                                                                                             # pauli_y = 2
                                                                                             # pauli_z = 3
-        
+
+
     def generate_random_error(self, p_error):
         for i in range(2):
             qubits = np.random.uniform(0, 1, size=(self.system_size, self.system_size))
@@ -98,6 +98,7 @@ class Toric_code():
 
         flux = flux0 + flux1
         plaquette_matrix = (flux == 1).astype(int)
+
         if state == 'state':
             self.current_state = np.stack((vertex_matrix, plaquette_matrix), axis=0)
         elif state == 'next_state':
@@ -113,7 +114,7 @@ class Toric_code():
             return 1
 
 
-    def eval_ground_state(self):    # True: trivial loop
+    def eval_ground_state(self):    # True: trivial loop -> Win!
                                     # False: non trivial loop
 	       # can only distinguish non trivial and trivial loop. Categorization what kind of non trivial loop does not work 
             # function works only for odd grid dimensions! 3x3, 5x5, 7x7        
@@ -217,10 +218,8 @@ class Toric_code():
         terminal = self.terminal_state(next_perspective)
         return perspective, action, reward, next_perspective, terminal 
 
-    #ta inn self.current_state som parameter i state parametern för att rita
-    #titel är titeln bilden får
-    def plot_toric_code(self, title):
-        state = self.current_state
+
+    def plot_toric_code(self, state, title):
         x_error_qubits1 = np.where(self.qubit_matrix[0,:,:] == 1)
         y_error_qubits1 = np.where(self.qubit_matrix[0,:,:] == 2)
         z_error_qubits1 = np.where(self.qubit_matrix[0,:,:] == 3)
@@ -285,8 +284,5 @@ class Toric_code():
         
         #plt.title(title)
         plt.axis('equal')
-        plt.savefig(str(title)+'.png')
+        plt.savefig('plots/graph_'+str(title)+'.png')
         plt.close()
-    
-
-        

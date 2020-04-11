@@ -5,11 +5,13 @@ import math
 import copy
 import torch
 import random
+import time
 EPS = 1e-8
 
 class MCTS_Rollout():
 
-    def __init__(self, device, args, Ns, Nsa, Qsa, Wsa, toric_code=None, syndrom=None):
+    def __init__(self, device, args, toric_code=None, syndrom=None, last_best_action = None):
+
         self.toric_code = toric_code # toric_model object
 
         if toric_code is None:
@@ -21,293 +23,273 @@ class MCTS_Rollout():
             self.syndrom = self.toric_code.current_state
 
         self.args = args     # c_puct, num_simulations (antalet noder), grid_shift 
-        self.Qsa = {}        # stores Q values for s,a (as defined in the paper)
+        self.Qsa = {}      # stores Q values for s,a (as defined in the paper)
         self.Nsa = {}        # stores #times edge s,a was visited
-        self.Ns = {}         # stores #times board s was visited
-        self.Ps = {}         # stores initial policy (returned by neural net)
-        self.device = device
+        self.Ns = {}        # stores #times board s was visited
+        self.Wsa = {}         # stores total value policy for node
+        self.device = device # 'cpu' or 'cuda'
+        self.actions = []
         self.loop_check = set() # set that stores state action pairs
         self.system_size = self.syndrom.shape[1]
-        self.next_state = []
-        self.current_state = []
-        self.batch_size = self.syndrom.shape[0]
-        
-        self.targetQsa = {}
-        self.reward = 0
-        self.states_to_leafnode = []
-        self.actions_to_leafnode = []
-        self.actions_to_leafnode_nostring = []
+
         self.qubit_matrix = np.zeros((2, self.system_size, self.system_size), dtype=int)
         self.ground_state = True    # True: only trivial loops, 
-                                   # False: non trivial loop
+                                   # False: non trivial loop 
 
-    def get_qs_actions(self, temp=1):
+        self.states_to_leafnode = [] # states from root to leaf
+        self.actions_to_leafnode = [] #Actions from root to leaf
+        self.actions_to_leafnode_nostring = []
+        self.reward = 0 #save reward when we go to leaf node
+        
+        self.last_best_action = last_best_action # best action from previous MCTS run
+
+        self.num_backprop = 0
+        self.layer = 0
+
+    def get_qs_actions(self):
 
         size = self.system_size
-        s = str(self.syndrom)
+        s = str(self.toric_code.current_state)
         actions_taken = np.zeros((2,size,size), dtype=int)
-
-        #.............................Search...............................
-
-        for i in range(self.args['num_simulations']):
-            self.search(copy.deepcopy(self.syndrom), actions_taken)
-            self.loop_check.clear()
         
-       #..............................Max Qsa .............................
+        #.............................Search...............................
+        
+        for i in range(self.args['num_simulations']):
+            #print('__________________')
+            #print('__________________')
+            #print('Root layer:', self.layer, ' Sim nr:', i)
+            #print('Sim nr:', i)
+            self.search(copy.deepcopy(self.syndrom), actions_taken, str(copy.deepcopy(self.syndrom)), copy.deepcopy(self.toric_code))
+            self.loop_check.clear()
+            self.states_to_leafnode.clear()
+            self.actions_to_leafnode.clear()
+            self.actions_to_leafnode_nostring.clear()
+        
+        #..............................Max Qsa .............................
         actions = self.get_possible_actions(self.syndrom)
-        all_Qsa = torch.tensor([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
-        all_targetQsa = torch.tensor([[self.targetQsa[(s,str(a))] if (s,str(a)) in self.targetQsa else 0 for a in position] for position in actions])
+        all_Qsa = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
 
         #best action
-        index_max = np.unravel_index((all_targetQsa).argmax(), all_targetQsa.shape)
+        maxQ = -float('inf')
+        for i in range(len(all_Qsa)):
+            for j in all_Qsa[i]:
+                if j > maxQ and j !=0:
+                    maxQ = j
+        index_max = np.where(all_Qsa==maxQ)
+        index_max = (index_max[0][0], index_max[1][0])
         best_action = actions[index_max[0]][index_max[1]]
-
         
-        return all_Qsa, actions, best_action
+        #Prevent loop where the same best action is chosen all the time. Especially important for system size = 3
+        if self.last_best_action != None:
+            equal = np.array_equal(best_action.position, self.last_best_action.position)
+            if equal and best_action.action == self.last_best_action.action:
+                print('Prevent loooooooooooooooooop')
+                #Get second highest Q_value
+                second_maxQ = -float('inf')
+                for i in range(len(all_Qsa)):
+                    for j in all_Qsa[i]:
+                        if j > second_maxQ and j != maxQ and j !=0:
+                            second_maxQ = j
+                #Get index of all second max values and chose one random amongst them
+                index_of_second_maxes = []
+                for i in range(len(all_Qsa)):
+                    n = 0
+                    for j in all_Qsa[i]:
+                        if j == second_maxQ:
+                            index_of_second_maxes.append((i,n))
+                        n += 1
+                rand_index = index_of_second_maxes[random.randint(0, len(index_of_second_maxes)-1)] 
+                 
+                #print('+++++++++++++++++')
+                ##print('last best action: ', self.last_best_action)
+                #print('current best action: ', best_action)
+                #print(all_Qsa) 
+                #print('Old MaxQ:',maxQ, ' old best action: ',best_action)             
+                best_action = actions[rand_index[0]][rand_index[1]]
+                #print('New MaxQ:',second_maxQ, ' old best action: ',best_action)  
+    
+        self.last_best_action = best_action
+        perspectives = self.generate_perspective(self.args['grid_shift'], self.syndrom)
+        perspectives = Perspective(*zip(*perspectives)).perspective
 
-    def search(self, state, actions_taken):
+        return all_Qsa, perspectives, actions, best_action, self.last_best_action
+
+    def search(self, state, actions_taken, root_state, toric_code):
         with torch.no_grad():
-            s = str(state)
-            #..................Get perspectives and batch for network......................
-
-            perspective_list = self.generate_perspective(self.args['grid_shift'], state)
-
-            #...........................Check if terminal state.............................
-
-            all_zeros = not np.any(state)
-            self.qubit_matrix = state
-            self.eval_ground_state()
-            if self.ground_state is False:
-                reward = -100
-                print('Non trivial loop :(')
-                return -100
-            elif all_zeros:
-                print('We Won! :)')
-                return 100
-
-            if np.all(state == 0):
-                if state.eval_ground_state(): #ska det vara self.toric.eval_ground_state(): här istället?
-                    #Trivial loop --> gamestate won!
-                    return 1
-                else:
-                    #non trivial loop --> game lost!
-                    return -1
-
-            # ............................If leaf node......................................
-            
-            if s not in self.Ns:
-                # leaf node => expand
-                v = self.rollout(perspective_list, copy.deepcopy(state), actions_taken)
-                # ej besökt detta state tidigare sätter dessa parametrar till 0
-                self.Ns[s] = 0
-                return v
-            '''
-            # ..........................Get best action...................................
-    
-            #Göra använda numpy för att göra UBC kalkyleringen snabbare.
-            
-            actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
-            UpperConfidence = self.UCBpuct(actions, s)
-            
-            #Väljer ut action med högst UCB som inte har valts tidigare (i denna staten):
-            while True:
-                # omvandlar 1D index -> 2D index
-                argmax = torch.argmax(UpperConfidence).cpu().numpy()
-                perspective_index = argmax // UpperConfidence.shape[1]
-                action_index = argmax % UpperConfidence.shape[1]
-                best_perspective = perspective_list[perspective_index]
-
-                action = Action(np.array(best_perspective.position), action_index+1)
-
-                a = str(action)
-
-                if (s,a) not in self.loop_check:
-                    self.loop_check.add((s,a))
-                    break
-                else:
-                    UpperConfidence[perspective_index][action_index] = -float('inf')
-            '''
-
-            #..........................Take random step...................................
-            action = self.take_random_step(copy.deepcopy(state), actions_taken)
-            a = str(action)
-        
-            #går ett steg framåt
-            self.step(action, state, actions_taken)                
-            
-            #kollar igenom nästa state
-            v = self.search(state, actions_taken)
-            
-            #går tilbaka med samma steg och finn rewards
-            self.next_state = copy.deepcopy(state)
-            self.step(action, state, actions_taken)
-            self.current_state = copy.deepcopy(state)
-            
-            #Obs 0.3*reward pga annars blir denna för dominant -> om negativ -> ibland negativt Qsa
-            self.reward = self.get_reward(self.next_state,self.current_state)
-            
-            # ............................BACKPROPAGATION................................
-
-            if (s,a) in self.Qsa:
-                self.targetQsa[(s,a)] = max(self.reward + self.args['discount_factor']*v, self.targetQsa[(s,a)])
-                self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + self.reward + self.args['discount_factor']*v)/(self.Nsa[(s,a)]+1)
-                self.Nsa[(s,a)] += 1
+            s = str(toric_code.current_state)
+            if self.layer == 1 or self.layer == 0:
+                reward_multiplier = self.args['reward_multiplier']
             else:
-                self.targetQsa[(s,a)] = v
-                self.Qsa[(s,a)] = v
+                reward_multiplier = 2
+            
+            #...........................Check if terminal state.............................
+            #if no trivial loop check if terminal state
+            terminal_state = toric_code.terminal_state(toric_code.current_state)
+            if terminal_state == 0:
+                toric_code.eval_ground_state()
+                if toric_code.ground_state == True:
+                    #print('......Backprop WE WON.......')
+                    self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
+                    self.states_to_leafnode = list(reversed(self.states_to_leafnode))
+                    v = 100*reward_multiplier
+                    self.backpropagation(v)
+                elif toric_code.ground_state == False:
+                    #print('......Backprop WE LOST.......')
+                    self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
+                    self.states_to_leafnode = list(reversed(self.states_to_leafnode))
+                    v = -100*reward_multiplier
+                    self.backpropagation(v)
+                return
+            
+            #............................Get perspectives ......................
+            perspective_list = self.generate_perspective(self.args['grid_shift'], toric_code.current_state)
+            perspectives = Perspective(*zip(*perspective_list))
+           
+            # ............................If leaf node......................................
+            if s not in self.Ns:
+                self.Ns[s] = 0
+
+                v_from_rollout = self.rollout(perspective_list, copy.deepcopy(toric_code), actions_taken)
+                v = v_from_rollout + self.reward*reward_multiplier
+
+                #print('_______')
+                #print('Leaf node at layer:',self.layer, ' --> Reward from rollout', v_from_rollout, 'Reward from move:', self.reward*reward_multiplier)
+                #print('Leaf node at layer:',self.layer, ' --> v from rollout =',v, 'Reward added to v:', self.reward)
+                if s != root_state:
+                    #print('......Backprop.......')
+                    self.actions_to_leafnode = list(reversed(self.actions_to_leafnode))
+                    self.states_to_leafnode = list(reversed(self.states_to_leafnode))
+                    self.backpropagation(v)
+                else:
+                    self.Ns[s] = 1
+                return
+            else:
+                self.reward = 0
+                self.selection(s, toric_code, perspectives, perspective_list, actions_taken, root_state)
+           
+            return
+
+    def selection(self, s, toric_code, perspectives, perspective_list, actions_taken, root_state):
+        self.states_to_leafnode.append(s)
+        # ..........................Get best action with UCB1...................................
+        actions = [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position]
+        current_Qsa = np.array([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions])
+        current_Nsa = np.array([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0 for a in opperator_actions] for opperator_actions in actions])
+        if s not in self.Ns:
+            current_Ns = 0.00001
+        else:
+            if self.Ns[s] == 0:
+                current_Ns = 1
+            else:
+                current_Ns = self.Ns[s]
+        UpperConfidence = current_Qsa + self.args['cpuct']*np.sqrt(np.log(current_Ns)/(current_Nsa+EPS))
+
+        #Choose action with higest UCB which has not been explored before
+        while True:
+            perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
+            best_perspective = perspective_list[perspective_index]
+
+            action = Action(np.array(best_perspective.position), action_index+1)
+
+            a = str(action)
+            if((s,a) not in self.loop_check):
+                self.loop_check.add((s,a))
+                break
+            else:
+                UpperConfidence[perspective_index][action_index] = -float('inf')
+  
+        #...........................Go down the tree with best action...........................
+        a = str(action)
+        current_state = copy.deepcopy(toric_code.current_state)
+        toric_code.step(action)
+        toric_code.current_state = toric_code.next_state 
+        next_state = copy.deepcopy(toric_code.current_state)
+        reward = self.get_reward(next_state, current_state, toric_code)
+        
+        
+        '''
+        print('---->--->---->---->---->---')
+        if (s,a) in self.Qsa:
+            print('Layer nr:', self.layer, ' Qsa:',self.Qsa[(s,a)], ' Nsa:',self.Nsa[(s,a)], ' ',action, 'Reward for move:',reward, 'L',self.layer,'R',reward)
+        else:
+            print('Layer nr:', self.layer, ' ',action, 'Reward for move:',reward)
+        '''
+        self.layer += 1
+        self.reward = reward
+        self.actions_to_leafnode.append(a)
+        self.actions_to_leafnode_nostring.append(action)
+        state = toric_code.current_state
+        self.search(state, actions_taken, root_state, toric_code)
+   
+    def backpropagation(self, v):
+        self.num_backprop += 1
+        i = 0
+        for s in self.states_to_leafnode:
+            a = self.actions_to_leafnode[i]
+            j = i+1
+            if (s,a) in self.Qsa:
+                Qsa1 = self.Qsa[(s,a)]
+
+                self.Wsa[(s,a)] = self.Wsa[(s,a)] + (self.args['discount_factor']**(j))*v  
+                self.Nsa[(s,a)] += 1
+                self.Qsa[(s,a)] = self.Wsa[(s,a)]/self.Nsa[(s,a)]
+
+                Qsa2 = self.Qsa[(s,a)]
+            else:
+                Qsa1 = 0
+
+                self.Wsa[(s,a)] = v
                 self.Nsa[(s,a)] = 1
+                self.Qsa[(s,a)] = self.Wsa[(s,a)]
 
+                Qsa2 = self.Qsa[(s,a)]
             self.Ns[s] += 1
-        return v 
-    
-    def take_random_step(self, state1, actions_taken):
-        state = copy.deepcopy(state1)
-        perspective_list = self.generate_perspective(self.args['grid_shift'], state)
-        s = str(state)
-        current_state = copy.deepcopy(state)
+            i += 1
+            self.layer -= 1
+            #print('Layer:',self.layer+1,'->',self.layer,' Qsa', Qsa1,'->',Qsa2, '  ',a)   
 
-        # only action in qubitmatrix 1 if qubitmatrix all zeros in 0 
-        if np.sum(current_state[0]) == 0:
-            pos_matrix_1 = []
-            for i in perspective_list:
-                if i.position[0] == 1:
-                    pos_matrix_1.append(i.position)
-            perspective_index_rand = random.randint(0,len(pos_matrix_1)-1)
-            rand_pos = pos_matrix_1[perspective_index_rand]
-            action_index_rand = random.randint(1,3)
-            rand_action = Action(np.array(rand_pos), action_index_rand) 
-        
-        elif np.sum(current_state[1]) == 0:     # only action in qubitmatrix 0 if qubitmatrix all zeros in 1           
-            pos_matrix_0 = []
-            #samlar perspektiven i matrix 0 i en array
-            for i in perspective_list:
-                if i.position[0] == 0:
-                    pos_matrix_0.append(i.position)
-            perspective_index_rand = random.randint(0,len(pos_matrix_0)-1)
-            rand_pos = pos_matrix_0[perspective_index_rand] 
-            action_index_rand = random.randint(1,3)  
-            rand_action = Action(np.array(rand_pos), action_index_rand) 
-        
-        else: #get random action from both matrices
-            perspective_index_rand = random.randint(0,len(perspective_list)-1)
-            rand_pos = perspective_list[perspective_index_rand].position
-            action_index_rand = random.randint(1,3)
-            rand_action = Action(np.array(rand_pos), action_index_rand)
+    def take_random_step(self, toric_code, actions_taken):
+        perspective_list = self.generate_perspective(self.args['grid_shift'], toric_code.current_state)
+        perspective_index_rand = random.randint(0,len(perspective_list)-1)
+        rand_pos = perspective_list[perspective_index_rand].position
+        action_index_rand = random.randint(1,3)
+        rand_action = Action(np.array(rand_pos), action_index_rand)
 
         return rand_action
 
+    def rollout(self, perspective_list, toric_code, actions_taken):
+        # get reward for every possible action from leaf node           
+        actions = self.get_possible_actions(self.syndrom)
+        reward = []
+        for i in range(len(actions)):
+            for j in actions[i]:   
+                toric = copy.deepcopy(toric_code)
+                current_state = copy.deepcopy(toric.current_state)
+                toric.step(j)
+                toric.current_state = toric.next_state 
+                next_state = copy.deepcopy(toric.current_state)
+                
+                v = self.get_reward(next_state, current_state, toric)
+                reward.append(v)
+        v = max(reward) #sum(reward)/len(reward)
 
-
-    def rollout(self, perspective_list, state1, actions_taken):
-        counter = 0 #number of steps in rollout
-        accumulated_reward = 0 
-        v = 0
-        discount = 0.5
-        state = copy.deepcopy(state1)
-        while True:
-            counter += 1
-            
-            #Check if non trivial loop
-            all_zeros = not np.any(state)
-            self.qubit_matrix = state
-            self.eval_ground_state()
-            if self.ground_state is False:
-                reward = -100
-                print('Non trivial loop :(')
-                break
-
-            # om ej terminal state
-            if all_zeros is False and counter <= self.args['rollout_length']:
-                perspective_list = self.generate_perspective(self.args['grid_shift'], state)
-                
-                s = str(state)
-                self.states_to_leafnode.append(s)
-                current_state = copy.deepcopy(state)
-                
-                # only action in qubitmatrix 1 if qubitmatrix all zeros in 0 
-                if np.sum(current_state[0]) == 0:
-                    pos_matrix_1 = []
-                    for i in perspective_list:
-                        if i.position[0] == 1:
-                            pos_matrix_1.append(i.position)
-                    perspective_index_rand = random.randint(0,len(pos_matrix_1)-1)
-                    rand_pos = pos_matrix_1[perspective_index_rand]
-                    action_index_rand = random.randint(1,3)
-                    rand_action = Action(np.array(rand_pos), action_index_rand) 
-                
-                elif np.sum(current_state[1]) == 0:     # only action in qubitmatrix 0 if qubitmatrix all zeros in 1           
-                    pos_matrix_0 = []
-                    #samlar perspektiven i matrix 0 i en array
-                    for i in perspective_list:
-                        if i.position[0] == 0:
-                            pos_matrix_0.append(i.position)
-                    perspective_index_rand = random.randint(0,len(pos_matrix_0)-1)
-                    rand_pos = pos_matrix_0[perspective_index_rand] 
-                    action_index_rand = random.randint(1,3)  
-                    rand_action = Action(np.array(rand_pos), action_index_rand) 
-                
-                else: #get random action from both matrices
-                    perspective_index_rand = random.randint(0,len(perspective_list)-1)
-                    rand_pos = perspective_list[perspective_index_rand].position
-                    action_index_rand = random.randint(1,3)
-                    rand_action = Action(np.array(rand_pos), action_index_rand)
-    
-                a = str(rand_action)
-                self.step(rand_action, state, actions_taken)
-                next_state = copy.deepcopy(state)
-                self.actions_to_leafnode.append(a)
-                self.actions_to_leafnode_nostring.append(rand_action)
-                
-                #get reward for step
-                accumulated_reward += self.get_reward(next_state, current_state)
-                
-                # discount factor because want to promote early high rewards
-                v += accumulated_reward *discount**(counter)
-    
-            #Break if terminal state
-            all_zeros = not np.any(state)
-            if all_zeros:
-                v += discount**(counter)*100
-                print('We Won in rollout! :)')
-                break
-            
-            elif counter == self.args['rollout_length']:
-                #print('Max rollout reached')
-                break
         return v
 
-    def get_reward(self, next_state, current_state):
-        #Check if non trivial loop
-        all_zeros = not np.any(next_state)
-        self.qubit_matrix = next_state
-        self.eval_ground_state()
-        if self.ground_state is False:
-            reward = -100
-        elif all_zeros == True:
-            reward = 100
+    def get_reward(self, next_state, current_state, toric_code):
+        #if no trivial loop check if terminal state
+        terminal_state = toric_code.terminal_state(current_state)
+        terminal_state = toric_code.terminal_state(toric_code.current_state)
+        if terminal_state == 0:
+            toric_code.eval_ground_state()
+            if toric_code.ground_state == True:
+                reward = 100
+            elif toric_code.ground_state == False:
+                reward = -100
         else:
             defects_state = np.sum(current_state)
             defects_next_state = np.sum(next_state)
             reward = defects_state - defects_next_state
-        if reward == 0:
-            reward = -2
         return reward
-
-    def UCBpuct(self, actions, s):
-        current_Qsa = torch.tensor([[self.Qsa[(s,str(a))] if (s, str(a)) in self.Qsa else 0 for a in opperator_actions] for opperator_actions in actions], dtype=torch.float32, device=self.device)
-        current_Nsa = torch.tensor([[self.Nsa[(s,str(a))] if (s, str(a)) in self.Nsa else 0 for a in opperator_actions] for opperator_actions in actions], dtype=torch.float32, device=self.device)
-        
-        if s not in self.Ns:
-            current_Ns = 0.001
-        else:
-            if self.Ns[s] == 0:
-                current_Ns = 0.001
-            else:
-                current_Ns = self.Ns[s]
-        
-        #använd max Q-värde: (eller använda )
-                
-        return current_Qsa + self.args['cpuct']*torch.sqrt(torch.tensor(np.log(current_Ns), dtype=torch.float32)/(current_Nsa+EPS))
 
     def generate_perspective(self, grid_shift, state):
         def mod(index, shift):
@@ -335,6 +317,7 @@ class MCTS_Rollout():
                     new_state = self.rotate_state(new_state) # rotate perspective clock wise
                     temp = Perspective(new_state, (1,i,j))
                     perspectives.append(temp)
+        
         return perspectives
 
     def step(self, action, syndrom, action_matrix):
@@ -374,52 +357,28 @@ class MCTS_Rollout():
         rot_state = np.stack((rot_vertex_matrix, rot_plaquette_matrix), axis=0)
         return rot_state
     
-    def mult_actions(self, action_matrix1, action_matrix2):
-        rule_table = np.array(([[0,1,2,3], [1,0,3,2], [2,3,0,1], [3,2,1,0]]), dtype=int)
-        return [[[rule_table[qu1][qu2] for qu1, qu2 in zip(row1, row2)] for row1, row2 in zip(qu_mat1, qu_mat2)] for qu_mat1, qu_mat2 in zip(action_matrix1, action_matrix2)]
-    
     def get_possible_actions(self, state):
         perspectives = self.generate_perspective(self.args['grid_shift'], state)
         perspectives = Perspective(*zip(*perspectives))
         return [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position] #bytte ut np.array(p_pos)
-    
-    def eval_ground_state(self):    # True: trivial loop
-                                    # False: non trivial loop
-	       # can only distinguish non trivial and trivial loop. Categorization what kind of non trivial loop does not work 
-            # function works only for odd grid dimensions! 3x3, 5x5, 7x7        
-        def split_qubit_matrix_in_x_and_z():
-        # loops vertex space qubit matrix 0
-            z_matrix_0 = self.qubit_matrix[0,:,:]        
-            y_errors = (z_matrix_0 == 2).astype(int)
-            z_errors = (z_matrix_0 == 3).astype(int)
-            z_matrix_0 = y_errors + z_errors 
-            # loops vertex space qubit matrix 1
-            z_matrix_1 = self.qubit_matrix[1,:,:]        
-            y_errors = (z_matrix_1 == 2).astype(int)
-            z_errors = (z_matrix_1 == 3).astype(int)
-            z_matrix_1 = y_errors + z_errors
-            # loops plaquette space qubit matrix 0
-            x_matrix_0 = self.qubit_matrix[0,:,:]        
-            x_errors = (x_matrix_0 == 1).astype(int)
-            y_errors = (x_matrix_0 == 2).astype(int)
-            x_matrix_0 = x_errors + y_errors 
-            # loops plaquette space qubit matrix 1
-            x_matrix_1 = self.qubit_matrix[1,:,:]        
-            x_errors = (x_matrix_1 == 1).astype(int)
-            y_errors = (x_matrix_1 == 2).astype(int)
-            x_matrix_1 = x_errors + y_errors
+  
+    #Takes in all the Qvalues and the corresponding perspectives and actions
+    # and returns the ones that have been visited more than or equal to nr_min_visits
+    def get_memory_Qvals(self, Qvals, perspectives, actions, nr_min_visits=5):
+        new_Qval = []
+        new_perspectives = []
 
-            return x_matrix_0, x_matrix_1, z_matrix_0, z_matrix_1
+        s = str(self.syndrom)
 
-        x_matrix_0, x_matrix_1, z_matrix_0, z_matrix_1 = split_qubit_matrix_in_x_and_z()
-        
-        loops_0 = np.sum(np.sum(x_matrix_0, axis=0))
-        loops_1 = np.sum(np.sum(x_matrix_1, axis=0))
-        
-        loops_2 = np.sum(np.sum(z_matrix_0, axis=0))
-        loops_3 = np.sum(np.sum(z_matrix_1, axis=0))
+        for i, list_action in zip(range(len(Qvals)), actions):
+            nr_visit_sum = 0
+            for action in list_action:
+                nr_visit_sum += self.Nsa[(s, str(action))] if (s,str(action)) in self.Nsa else 0
+            if nr_visit_sum >= nr_min_visits:
+                new_Qval.append(Qvals[i])
+                new_perspectives.append(perspectives[i])
+        return (new_Qval, new_perspectives)
 
-        if loops_0%2 == 1 or loops_1%2 == 1:
-            self.ground_state = False
-        elif loops_2%2 == 1 or loops_3%2 == 1:
-            self.ground_state = False
+    def next_step(self, action):
+        self.toric_code.step(action)
+        self.toric_code.current_state = self.toric_code.next_state

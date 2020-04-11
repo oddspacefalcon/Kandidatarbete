@@ -6,6 +6,7 @@ from collections import namedtuple, Counter
 import operator
 import os
 from copy import deepcopy
+import copy
 import heapq
 # pytorch
 import torch
@@ -21,12 +22,12 @@ from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from .util import incremental_mean, convert_from_np_to_tensor, Transition, Action, Qval_Perspective
 from .MCTS import MCTS
-from .TestTree import TestTree
+from .MCTS_Rollout import MCTS_Rollout
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
                 number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
-                cpuct=0.5, num_mcts_simulations=50, discount_factor=0.95, nr_memories=5):
+                cpuct=0.5, num_mcts_simulations=20, discount_factor=0.95, nr_memories=5):
 
         # device
         self.device = device
@@ -61,9 +62,16 @@ class RL():
         # hyperparameters RL
         self.number_of_actions = number_of_actions
         self.discount_factor = discount_factor
+        self.Nr_epoch = 0
         # hyperparameters MCTS
-        self.tree_args = {'cpuct': cpuct, 'num_simulations':num_mcts_simulations, 'grid_shift': self.grid_shift, 'discount_factor': self.discount_factor}
-
+        
+        # Currently for system size = 3
+        disscount_backprop = 0.9 # OK
+        num_sim = 50  #50
+        cpuct = np.sqrt(2) #OK
+        reward_multiplier = 100
+        self.tree_args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': self.system_size//2, 'discount_factor':disscount_backprop, \
+            'reward_multiplier':reward_multiplier}
 
     def save_network(self, PATH):
         torch.save(self.model, PATH)
@@ -103,18 +111,10 @@ class RL():
             self.memory.priority_update(indices, priorities)
         return loss.mean()
 
-
-    # def get_mcts_output(self, batch_next_state, batch_size):
-    #     mcts = MCTS(self.model, self.device, self.tree_args, syndroms=batch_next_state.cpu().numpy())
-    #     max_Q, _ = mcts.get_qs_actions()
-    #     return max_Q.to(self.device)
-
-
     def get_batch_input(self, state_batch):
         batch_input = np.stack(state_batch, axis=0)
         batch_input = convert_from_np_to_tensor(batch_input)
         return batch_input.to(self.device)
-
 
     def train(self, epochs, training_steps=int, optimizer=str, batch_size=int, replay_start_size=int, reach_final_epsilon_cpuct=0.5,
               epsilon_start=1.0, num_of_epsilon_steps=10, epsilon_end=0.1,  cpuct_start=20, cpuct_end=0.1, num_of_epsilon_cpuct_steps=10):
@@ -148,12 +148,15 @@ class RL():
             self.toric.generate_random_error(self.p_error)
             terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-            mcts = TestTree(self.model, self.device, self.tree_args, toric_code=self.toric)
+            #mcts = MCTS(self.model, self.device, self.tree_args, toric_code=self.toric)
+            #mcts = MCTS_Rollout('cpu', self.tree_args, toric_code=self.toric)
+            last_best_action = None
+            mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
             self.model.eval()
 
             simulations = [100, 10]
+
             # solve one episode
-            
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
                 
                 simulation_index = num_of_steps_per_episode if num_of_steps_per_episode < len(simulations) else len(simulations)-1
@@ -162,27 +165,24 @@ class RL():
                 num_of_epsilon_cpuct_steps += 1
                 steps_counter += 1
                 iteration += 1
+                
 
                 mcts.args['num_simulations']  = simulations[simulation_index]
                 # select action using epsilon greedy policy
                 
-                Qvals, perspectives, actions = mcts.get_maxQsa()
-                perspective_index, action_index = mcts.best_index(Qvals)
-                best_action = actions[perspective_index][action_index]
+                Qvals, perspectives, actions, best_action, last_best_action = mcts.get_qs_actions()
                 
                 #only put the perspectives that have been visited more than 1 time in the memory buffer
                 Qvals, perspectives = mcts.get_memory_Qvals(Qvals, perspectives, actions, nr_min_visits=1)
 
+                print('training steps:', iteration, 'Epoch nr:', self.Nr_epoch+1)
+
                 mcts.next_step(best_action)
 
-
-                
-                
                 # save transition in memory
                 for Qs, perspective in zip(Qvals, perspectives):
                     self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
-
-                
+  
                 # experience replay
                 if steps_counter > replay_start_size:
                     update_counter += 1
@@ -201,8 +201,6 @@ class RL():
                 
                 terminal_state = self.toric.terminal_state(self.toric.next_state)
 
-            
-
     def get_reward(self):
         terminal = np.all(self.toric.next_state==0)
         if terminal == True:
@@ -214,12 +212,11 @@ class RL():
 
         return reward
 
-
-    def select_action(self, number_of_actions=3, epsilon=float):
-        # set network in evluation mode 
+    def select_action_prediction(self, number_of_actions=int, epsilon=float, grid_shift=int, prev_action=float):
+        # set network in eval mode
         self.model.eval()
-        # generate perspectives 
-        perspectives = self.toric.generate_perspective(self.grid_shift, self.toric.current_state)
+        # generate perspectives
+        perspectives = self.toric.generate_perspective(grid_shift, self.toric.current_state)
         number_of_perspectives = len(perspectives)
         # preprocess batch of perspectives and actions 
         perspectives = Perspective(*zip(*perspectives))
@@ -227,34 +224,23 @@ class RL():
         batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
         batch_perspectives = batch_perspectives.to(self.device)
         batch_position_actions = perspectives.position
-        #choose action using epsilon greedy approach
-        rand = random.random()
-        if(1 - epsilon > rand):
-            # select greedy action 
-            with torch.no_grad():
-                policy_net_output = self.model(batch_perspectives)
-                q_values_table = np.array(policy_net_output.cpu())
-                row, col = np.where(q_values_table == np.max(q_values_table))
-                perspective = row[0]
-                max_q_action = col[0] + 1
-                step = Action(batch_position_actions[perspective], max_q_action)
-        # select random action
-        else:
-            random_perspective = random.randint(0, number_of_perspectives-1)
-            random_action = random.randint(1, number_of_actions)
-            step = Action(batch_position_actions[random_perspective], random_action)  
-        return step            
+        # generate action value for different perspectives 
+        with torch.no_grad():
+            policy_net_output = self.model(batch_perspectives)
+            q_values_table = np.array(policy_net_output.cpu())
+        
+        #choose action using max(Q)
+        row, col = np.where(q_values_table == np.max(q_values_table))
+        perspective = row[0]
+        max_q_action = col[0] + 1
+        step = Action(batch_position_actions[perspective], max_q_action)
+        q_value = q_values_table[row[0], col[0]]
 
-
-    def select_action_prediction(self):
-        mcts = TestTree(deepcopy(self.model), self.device, self.tree_args, deepcopy(self.toric))
-        _, action = mcts.get_qs_actions()
-        return action
-
-
+        return step, q_value
+    
     def prediction(self, num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH=None, plot_one_episode=False, cpuct=0.0,
         show_network=False, show_plot=False, prediction_list_p_error=float, minimum_nbr_of_qubit_errors=0, print_Q_values=False, save_prediction=True):
-        # load network for prediction and set eval mode 
+        # load network for prediction and set eval mode
         self.tree_args['cpuct'] = cpuct
         if PATH != None:
             self.load_network(PATH)
@@ -265,6 +251,7 @@ class RL():
         average_number_of_steps_list = np.zeros(len(prediction_list_p_error))
         mean_q_list = np.zeros(len(prediction_list_p_error))
         failed_syndroms = []
+        
         # loop through different p_error
         for i, p_error in enumerate(prediction_list_p_error):
             ground_state = np.ones(num_of_predictions, dtype=bool)
@@ -273,6 +260,7 @@ class RL():
             mean_q_per_p_error = 0
             steps_counter = 0
             for j in range(num_of_predictions):
+                print('prediction nr', j)
                 num_of_steps_per_episode = 0
                 prev_action = 0
                 terminal_state = 0
@@ -289,14 +277,18 @@ class RL():
                     self.toric.plot_toric_code(self.toric.current_state, 'initial_syndrom')
                 
                 init_qubit_state = deepcopy(self.toric.qubit_matrix)
+                
                 # solve syndrome
                 while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                     steps_counter += 1
                     num_of_steps_per_episode += 1
                     # choose greedy action
-
-                    action = self.select_action_prediction()
                     
+                    action, q_value = self.select_action_prediction(number_of_actions=self.number_of_actions, 
+                                                                    epsilon=epsilon,
+                                                                    grid_shift=self.grid_shift,
+                                                                    prev_action=prev_action)
+                    #action = self.select_action_prediction()
                     prev_action = action
                     self.toric.step(action)
                     self.toric.current_state = self.toric.next_state
@@ -324,7 +316,6 @@ class RL():
 
         return error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error
 
-
     def train_for_n_epochs(self, training_steps=int, epochs=int, num_of_predictions=100, num_of_steps_prediction=50, 
         optimizer=str, save=True, directory_path='network', prediction_list_p_error=[0.1],
         batch_size=32, replay_start_size=32):
@@ -337,6 +328,7 @@ class RL():
                     batch_size=batch_size,
                     replay_start_size=replay_start_size,
                     epochs=epochs)
+            self.Nr_epoch = i+1
             print('training done, epoch: ', i+1)
             # evaluate network
             error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, epsilon=0.0, cpuct=0.0,
@@ -344,10 +336,10 @@ class RL():
                                                                                                                                                                         num_of_steps=num_of_steps_prediction)
 
             data_all = np.append(data_all, np.array([[self.system_size, self.network_name, i+1, self.replay_memory, self.device, self.learning_rate, optimizer,
-            training_steps * (i+1), prediction_list_p_error[0], num_of_predictions, len(failed_syndroms)/2, error_corrected_list[0], ground_state_list[0], average_number_of_steps_list[0], self.p_error]]), axis=0)
+            training_steps * (i+1), prediction_list_p_error[0], self.p_error, num_of_predictions, ground_state_list[0], average_number_of_steps_list[0], len(failed_syndroms)/2, error_corrected_list[0]]]), axis=0)
             # save training settings in txt file 
             np.savetxt(directory_path + '/data_all.txt', data_all, 
-                header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, number_of_predictions, number_of_failed_syndroms, error_corrected_list, ground_state_list, average_number_of_steps_list, p_error_train', delimiter=',', fmt="%s")
+                header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, p_error_train, number_of_predictions, ground_state_list, average_number_of_steps_list, number_of_failed_syndroms, error_corrected_list', delimiter=',', fmt="%s")
             # save network
             step = (i + 1) * training_steps
             PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{5}_optimizer_{4}__steps_{3}_learning_rate_{6}.pt'.format(
@@ -355,4 +347,3 @@ class RL():
             self.save_network(PATH)
             
         return error_corrected_list
-

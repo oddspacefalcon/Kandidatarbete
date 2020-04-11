@@ -8,7 +8,6 @@ from .sum_tree import Sum_tree
 Transition = namedtuple('Transition',
                         ['state', 'action', 'reward', 'next_state', 'terminal'])
 
-
 class Replay_memory_uniform(object):
 
     def __init__(self, capacity): # alpha is not in use 
