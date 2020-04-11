@@ -27,13 +27,13 @@ NETWORK = NN_11
 
 # common system sizes are 3,5,7 and 9 
 # grid size must be odd! 
-SYSTEM_SIZE = 5
+SYSTEM_SIZE = 3
 
 # For continuing the training of an agent
-continue_training = True
+continue_training = False
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'NN_11_DoubleMCTS'
+NETWORK_FILE_NAME = 'NN_11_MCTS_Rollout'
 start = start = time.time() 
 # initialize RL class and training parameters 
 rl = RL(Network=NETWORK,
@@ -68,9 +68,9 @@ num_epochs = 10
 
 # train for n epochs the agent (test parameters)
 # Tid 4.4 h för d=3: num_epochs = 10, training_steps=1000, num_of_predictions=10, num_of_steps_prediction=10, batch_size=32,
-rl.train_for_n_epochs(training_steps=1000,
+rl.train_for_n_epochs(training_steps=500,
                     num_of_predictions=10,
-                    num_of_steps_prediction=75,
+                    num_of_steps_prediction=50,
                     epochs=num_epochs,
                     optimizer='Adam',
                     batch_size=32,

@@ -10,7 +10,7 @@ EPS = 1e-8
 
 class MCTS_Rollout():
 
-    def __init__(self, device, args, toric_code=None, syndrom=None):
+    def __init__(self, device, args, toric_code=None, syndrom=None, last_best_action = None):
 
         self.toric_code = toric_code # toric_model object
 
@@ -27,50 +27,40 @@ class MCTS_Rollout():
         self.Nsa = {}        # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
         self.Wsa = {}         # stores total value policy for node
-        self.Asav = {}      # stores (s,a,v) for that branch as key  and the action as value. 
-        self.Actions_s = {}
         self.device = device # 'cpu' or 'cuda'
         self.actions = []
-        self.current_level = 0
         self.loop_check = set() # set that stores state action pairs
         self.system_size = self.syndrom.shape[1]
-        self.next_state = []
-        self.current_state = []
-        self.atLeafNode = False
 
         self.qubit_matrix = np.zeros((2, self.system_size, self.system_size), dtype=int)
         self.ground_state = True    # True: only trivial loops, 
                                    # False: non trivial loop 
-        self.targetQsa = {}
-        self.taken_actions = []
-        self.states_to_leafnode = []
-        self.actions_to_leafnode = []
+
+        self.states_to_leafnode = [] # states from root to leaf
+        self.actions_to_leafnode = [] #Actions from root to leaf
         self.actions_to_leafnode_nostring = []
         self.reward = 0 #save reward when we go to leaf node
-        self.counter = 0
-        self.num_backprop = 0
+        
+        self.last_best_action = last_best_action # best action from previous MCTS run
 
+        self.num_backprop = 0
         self.layer = 0
 
-    def get_qs_actions(self, temp=1):
+    def get_qs_actions(self):
 
         size = self.system_size
         s = str(self.toric_code.current_state)
         actions_taken = np.zeros((2,size,size), dtype=int)
         
         #.............................Search...............................
-       
         
         for i in range(self.args['num_simulations']):
             #print('__________________')
             #print('__________________')
             #print('Root layer:', self.layer, ' Sim nr:', i)
             #print('Sim nr:', i)
-
-            self.counter = i + 1
             self.search(copy.deepcopy(self.syndrom), actions_taken, str(copy.deepcopy(self.syndrom)), copy.deepcopy(self.toric_code))
             self.loop_check.clear()
-
             self.states_to_leafnode.clear()
             self.actions_to_leafnode.clear()
             self.actions_to_leafnode_nostring.clear()
@@ -78,22 +68,51 @@ class MCTS_Rollout():
         #..............................Max Qsa .............................
         actions = self.get_possible_actions(self.syndrom)
         all_Qsa = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
-        all_Nsa = np.array([[self.Nsa[(s,str(a))] if (s,str(a)) in self.Nsa else 0 for a in position] for position in actions])
-        all_Wsa = np.array([[self.Wsa[(s,str(a))] if (s,str(a)) in self.Wsa else 0 for a in position] for position in actions])
 
         #best action
-        #index_max = np.unravel_index((all_Qsa).argmax(), all_Qsa.shape)
-        temp = -float('inf')
+        maxQ = -float('inf')
         for i in range(len(all_Qsa)):
             for j in all_Qsa[i]:
-                if j > temp and j !=0:
-                    temp = j
-        index_max = np.where(all_Qsa==temp)
+                if j > maxQ and j !=0:
+                    maxQ = j
+        index_max = np.where(all_Qsa==maxQ)
         index_max = (index_max[0][0], index_max[1][0])
         best_action = actions[index_max[0]][index_max[1]]
+        
+        #Prevent loop where the same best action is chosen all the time. Especially important for system size = 3
+        if self.last_best_action != None:
+            equal = np.array_equal(best_action.position, self.last_best_action.position)
+            if equal and best_action.action == self.last_best_action.action:
+                print('Prevent loooooooooooooooooop')
+                #Get second highest Q_value
+                second_maxQ = -float('inf')
+                for i in range(len(all_Qsa)):
+                    for j in all_Qsa[i]:
+                        if j > second_maxQ and j != maxQ and j !=0:
+                            second_maxQ = j
+                #Get index of all second max values and chose one random amongst them
+                index_of_second_maxes = []
+                for i in range(len(all_Qsa)):
+                    n = 0
+                    for j in all_Qsa[i]:
+                        if j == second_maxQ:
+                            index_of_second_maxes.append((i,n))
+                        n += 1
+                rand_index = index_of_second_maxes[random.randint(0, len(index_of_second_maxes)-1)] 
+                 
+                #print('+++++++++++++++++')
+                ##print('last best action: ', self.last_best_action)
+                #print('current best action: ', best_action)
+                #print(all_Qsa) 
+                #print('Old MaxQ:',maxQ, ' old best action: ',best_action)             
+                best_action = actions[rand_index[0]][rand_index[1]]
+                #print('New MaxQ:',second_maxQ, ' old best action: ',best_action)  
+    
+        self.last_best_action = best_action
+        perspectives = self.generate_perspective(self.args['grid_shift'], self.syndrom)
+        perspectives = Perspective(*zip(*perspectives)).perspective
 
-        return best_action
-
+        return all_Qsa, perspectives, actions, best_action, self.last_best_action
 
     def search(self, state, actions_taken, root_state, toric_code):
         with torch.no_grad():
@@ -187,15 +206,15 @@ class MCTS_Rollout():
         next_state = copy.deepcopy(toric_code.current_state)
         reward = self.get_reward(next_state, current_state, toric_code)
         
+        
         '''
         print('---->--->---->---->---->---')
-        self.layer += 1
         if (s,a) in self.Qsa:
             print('Layer nr:', self.layer, ' Qsa:',self.Qsa[(s,a)], ' Nsa:',self.Nsa[(s,a)], ' ',action, 'Reward for move:',reward, 'L',self.layer,'R',reward)
         else:
             print('Layer nr:', self.layer, ' ',action, 'Reward for move:',reward)
         '''
-
+        self.layer += 1
         self.reward = reward
         self.actions_to_leafnode.append(a)
         self.actions_to_leafnode_nostring.append(action)
@@ -338,53 +357,28 @@ class MCTS_Rollout():
         rot_state = np.stack((rot_vertex_matrix, rot_plaquette_matrix), axis=0)
         return rot_state
     
-    def mult_actions(self, action_matrix1, action_matrix2):
-        rule_table = np.array(([[0,1,2,3], [1,0,3,2], [2,3,0,1], [3,2,1,0]]), dtype=int)
-
-        return [[[rule_table[qu1][qu2] for qu1, qu2 in zip(row1, row2)] for row1, row2 in zip(qu_mat1, qu_mat2)] for qu_mat1, qu_mat2 in zip(action_matrix1, action_matrix2)]
-    
     def get_possible_actions(self, state):
         perspectives = self.generate_perspective(self.args['grid_shift'], state)
         perspectives = Perspective(*zip(*perspectives))
         return [[Action(np.array(p_pos), x+1) for x in range(3)] for p_pos in perspectives.position] #bytte ut np.array(p_pos)
+  
+    #Takes in all the Qvalues and the corresponding perspectives and actions
+    # and returns the ones that have been visited more than or equal to nr_min_visits
+    def get_memory_Qvals(self, Qvals, perspectives, actions, nr_min_visits=5):
+        new_Qval = []
+        new_perspectives = []
 
-    def eval_ground_state(self):    # True: trivial loop
-                                    # False: non trivial loop
-	       # can only distinguish non trivial and trivial loop. Categorization what kind of non trivial loop does not work 
-            # function works only for odd grid dimensions! 3x3, 5x5, 7x7        
-        def split_qubit_matrix_in_x_and_z():
-        # loops vertex space qubit matrix 0
-            z_matrix_0 = self.qubit_matrix[0,:,:]        
-            y_errors = (z_matrix_0 == 2).astype(int)
-            z_errors = (z_matrix_0 == 3).astype(int)
-            z_matrix_0 = y_errors + z_errors 
-            # loops vertex space qubit matrix 1
-            z_matrix_1 = self.qubit_matrix[1,:,:]        
-            y_errors = (z_matrix_1 == 2).astype(int)
-            z_errors = (z_matrix_1 == 3).astype(int)
-            z_matrix_1 = y_errors + z_errors
-            # loops plaquette space qubit matrix 0
-            x_matrix_0 = self.qubit_matrix[0,:,:]        
-            x_errors = (x_matrix_0 == 1).astype(int)
-            y_errors = (x_matrix_0 == 2).astype(int)
-            x_matrix_0 = x_errors + y_errors 
-            # loops plaquette space qubit matrix 1
-            x_matrix_1 = self.qubit_matrix[1,:,:]        
-            x_errors = (x_matrix_1 == 1).astype(int)
-            y_errors = (x_matrix_1 == 2).astype(int)
-            x_matrix_1 = x_errors + y_errors
+        s = str(self.syndrom)
 
-            return x_matrix_0, x_matrix_1, z_matrix_0, z_matrix_1
+        for i, list_action in zip(range(len(Qvals)), actions):
+            nr_visit_sum = 0
+            for action in list_action:
+                nr_visit_sum += self.Nsa[(s, str(action))] if (s,str(action)) in self.Nsa else 0
+            if nr_visit_sum >= nr_min_visits:
+                new_Qval.append(Qvals[i])
+                new_perspectives.append(perspectives[i])
+        return (new_Qval, new_perspectives)
 
-        x_matrix_0, x_matrix_1, z_matrix_0, z_matrix_1 = split_qubit_matrix_in_x_and_z()
-        
-        loops_0 = np.sum(np.sum(x_matrix_0, axis=0))
-        loops_1 = np.sum(np.sum(x_matrix_1, axis=0))
-        
-        loops_2 = np.sum(np.sum(z_matrix_0, axis=0))
-        loops_3 = np.sum(np.sum(z_matrix_1, axis=0))
-
-        if loops_0%2 == 1 or loops_1%2 == 1:
-            self.ground_state = False
-        elif loops_2%2 == 1 or loops_3%2 == 1:
-            self.ground_state = False
+    def next_step(self, action):
+        self.toric_code.step(action)
+        self.toric_code.current_state = self.toric_code.next_state

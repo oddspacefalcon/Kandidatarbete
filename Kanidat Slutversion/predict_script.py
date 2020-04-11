@@ -14,24 +14,16 @@ device = 'cuda'
 
 ##########################################################################
 
-# common system sizes are 3,5,7 and 9 
-# grid size must be odd! 
-system_size = 5
+# common system sizes are 3,5,7 and 9. Grid size must be odd! 
+system_size = 3
 
-# valid network names: 
-#   NN_11
-#   NN_17
-#   ResNet18
-#   ResNet34
-#   ResNet50
-#   ResNet101
-#   ResNet152
-network = NN_17
+# valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
+network = NN_11
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'size_5_NN_11_DoubleMCTS_epoch_3_memory_uniform_optimizer_Adam__steps_3000_learning_rate_0.00025'
+NETWORK_FILE_NAME = 'size_3_NN_11_MCTS_Rollout_epoch_18_memory_uniform_optimizer_Adam__steps_9000_learning_rate_0.00025'
 
-num_of_predictions = 10
+num_of_predictions = 500
 
 # initialize RL class
 rl = RL(Network=network,
@@ -41,7 +33,7 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.1]
+prediction_list_p_error = [0.05]
 # generate syndrome with a fixed amount of errors 
 minimum_nbr_of_qubit_errors = int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
@@ -66,9 +58,12 @@ error_corrected_list, ground_state_list, average_number_of_steps_list, failed_sy
 runtime = time.time()-start
 runtime = runtime / 3600
 
-print(error_corrected_list, 'error corrected')
-print(ground_state_list, 'ground state conserved')
-print(average_number_of_steps_list, 'average number of steps')
+win_rate = (num_of_predictions-(len(failed_syndroms)/2))/num_of_predictions
+print(ground_state_list, 'ground state conserved rate.')
+print(average_number_of_steps_list, 'average number of steps.')
+print(len(failed_syndroms)/2, 'failed syndroms out of',num_of_predictions, 'predictions --> Win rate:',win_rate)
+
+
 
   
 # save training settings in txt file 

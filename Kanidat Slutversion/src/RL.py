@@ -6,6 +6,7 @@ from collections import namedtuple, Counter
 import operator
 import os
 from copy import deepcopy
+import copy
 import heapq
 # pytorch
 import torch
@@ -21,6 +22,7 @@ from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from .util import incremental_mean, convert_from_np_to_tensor, Transition, Action, Qval_Perspective
 from .MCTS import MCTS
+from .MCTS_Rollout import MCTS_Rollout
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
@@ -62,15 +64,14 @@ class RL():
         self.discount_factor = discount_factor
         self.Nr_epoch = 0
         # hyperparameters MCTS
-        #self.tree_args = {'cpuct': cpuct, 'num_simulations':num_mcts_simulations, 'grid_shift': self.grid_shift, 'discount_factor': self.discount_factor}
         
-        disscount_rollout = 0.75 
-        num_sim_long = 20
-        num_sim_MCTS2 = 5 
-        rollout = 3 
-        second_rollout = 3
-        self.tree_args = {'cpuct': 1*np.sqrt(2), 'num_simulations':num_sim_long, 'grid_shift': self.system_size//2, 'discount_factor':disscount_rollout, \
-             'rollout_length':rollout, 'second_MCTS':num_sim_MCTS2, 'second_MCTS_rollout': second_rollout}
+        # Currently for system size = 3
+        disscount_backprop = 0.9 # OK
+        num_sim = 50  #50
+        cpuct = np.sqrt(2) #OK
+        reward_multiplier = 100
+        self.tree_args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': self.system_size//2, 'discount_factor':disscount_backprop, \
+            'reward_multiplier':reward_multiplier}
 
     def save_network(self, PATH):
         torch.save(self.model, PATH)
@@ -110,13 +111,6 @@ class RL():
             self.memory.priority_update(indices, priorities)
         return loss.mean()
 
-
-    # def get_mcts_output(self, batch_next_state, batch_size):
-    #     mcts = MCTS(self.model, self.device, self.tree_args, syndroms=batch_next_state.cpu().numpy())
-    #     max_Q, _ = mcts.get_qs_actions()
-    #     return max_Q.to(self.device)
-
-
     def get_batch_input(self, state_batch):
         batch_input = np.stack(state_batch, axis=0)
         batch_input = convert_from_np_to_tensor(batch_input)
@@ -155,14 +149,14 @@ class RL():
             terminal_state = self.toric.terminal_state(self.toric.current_state)
 
             #mcts = MCTS(self.model, self.device, self.tree_args, toric_code=self.toric)
-            
-            mcts = TestTree('cpu', self.tree_args, toric_code=self.toric)
-            
+            #mcts = MCTS_Rollout('cpu', self.tree_args, toric_code=self.toric)
+            last_best_action = None
+            mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
             self.model.eval()
 
             simulations = [100, 10]
+
             # solve one episode
-            
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
                 
                 simulation_index = num_of_steps_per_episode if num_of_steps_per_episode < len(simulations) else len(simulations)-1
@@ -171,13 +165,12 @@ class RL():
                 num_of_epsilon_cpuct_steps += 1
                 steps_counter += 1
                 iteration += 1
+                
 
                 mcts.args['num_simulations']  = simulations[simulation_index]
                 # select action using epsilon greedy policy
                 
-                Qvals, perspectives, actions = mcts.get_Qvals()
-                perspective_index, action_index = mcts.best_index(Qvals)
-                best_action = actions[perspective_index][action_index]
+                Qvals, perspectives, actions, best_action, last_best_action = mcts.get_qs_actions()
                 
                 #only put the perspectives that have been visited more than 1 time in the memory buffer
                 Qvals, perspectives = mcts.get_memory_Qvals(Qvals, perspectives, actions, nr_min_visits=1)
@@ -189,8 +182,7 @@ class RL():
                 # save transition in memory
                 for Qs, perspective in zip(Qvals, perspectives):
                     self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
-
-                
+  
                 # experience replay
                 if steps_counter > replay_start_size:
                     update_counter += 1
@@ -259,6 +251,7 @@ class RL():
         average_number_of_steps_list = np.zeros(len(prediction_list_p_error))
         mean_q_list = np.zeros(len(prediction_list_p_error))
         failed_syndroms = []
+        
         # loop through different p_error
         for i, p_error in enumerate(prediction_list_p_error):
             ground_state = np.ones(num_of_predictions, dtype=bool)
@@ -343,10 +336,10 @@ class RL():
                                                                                                                                                                         num_of_steps=num_of_steps_prediction)
 
             data_all = np.append(data_all, np.array([[self.system_size, self.network_name, i+1, self.replay_memory, self.device, self.learning_rate, optimizer,
-            training_steps * (i+1), prediction_list_p_error[0], num_of_predictions, len(failed_syndroms)/2, error_corrected_list[0], ground_state_list[0], average_number_of_steps_list[0], self.p_error]]), axis=0)
+            training_steps * (i+1), prediction_list_p_error[0], self.p_error, num_of_predictions, ground_state_list[0], average_number_of_steps_list[0], len(failed_syndroms)/2, error_corrected_list[0]]]), axis=0)
             # save training settings in txt file 
             np.savetxt(directory_path + '/data_all.txt', data_all, 
-                header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, number_of_predictions, number_of_failed_syndroms, error_corrected_list, ground_state_list, average_number_of_steps_list, p_error_train', delimiter=',', fmt="%s")
+                header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, p_error_train, number_of_predictions, ground_state_list, average_number_of_steps_list, number_of_failed_syndroms, error_corrected_list', delimiter=',', fmt="%s")
             # save network
             step = (i + 1) * training_steps
             PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{5}_optimizer_{4}__steps_{3}_learning_rate_{6}.pt'.format(
