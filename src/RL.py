@@ -289,14 +289,14 @@ class RL():
                 self.toric = Toric_code(self.system_size)
                 #self.toric.generate_random_error(p_error)
                 
-                self.toric.generate_random_error(p_error)
+                #self.toric.generate_random_error(p_error)
                 ############################################
-                '''
+                
                 if minimum_nbr_of_qubit_errors == 0:
                     self.toric.generate_random_error(p_error)
                 else:
                     self.toric.generate_n_random_errors(minimum_nbr_of_qubit_errors)
-                '''
+                
                 #############################################
                 
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
