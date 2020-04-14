@@ -51,11 +51,13 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 
             # generate random syndrom
             toric = Toric_code(system_size)
-
+            toric.generate_random_error(p_error)
+            '''
             if minimum_nbr_of_qubit_errors == 0:
                 toric.generate_random_error(p_error)
             else:
                 toric.generate_n_random_errors(minimum_nbr_of_qubit_errors)
+            '''
             terminal_state = toric.terminal_state(toric.current_state)
             # plot one episode
             if plot_one_episode == True and j == 0 and i == 0:
@@ -70,7 +72,7 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 
                 # choose MCTS action
                 mcts = MCTS_Rollout2('cpu', args, copy.deepcopy(toric), None) #Classic rollout MCTS 
-                _,_,_,action , last_best_action_array = mcts.get_qs_actions()
+                _,_,_,action  = mcts.get_qs_actions()
 
                 # choose MCTS action
                 #mcts = MCTS_Rollout('cpu', args, copy.deepcopy(toric), None, last_best_action) #Classic rollout MCTS 
@@ -130,12 +132,12 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 # d = 7, P_error = 0.1, disscount_backprop = 0.9, num_sim = 90
 # d = 9, P_error = 0.1, disscount_backprop = 0.9, num_sim = 110
 
-system_size = 11
-num_sim = 110  #50
-num_of_predictions = 2
+system_size = 5
+num_sim = 50  #50
+num_of_predictions = 100
 
 #########################################################################################################################################
-P_error = 0.1
+P_error = 0.05
 disscount_backprop = 0.9
 cpuct = np.sqrt(2) #OK
 reward_multiplier = 100

@@ -13,7 +13,7 @@ from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 
 ##########################################################################
 
-device = 'cpu' #torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = 'cuda' #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # valid network names: 
 #   NN_11 # SYSTEM_SIZE = 5
@@ -33,9 +33,10 @@ SYSTEM_SIZE = 5
 continue_training = False
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'AAAAA'
+NETWORK_FILE_NAME = 'A_Size_5_NN_11_numsim_70'
 start = start = time.time() 
-# initialize RL class and training parameters 
+# initialize RL class and training parameters
+# max_nbr_actions_per_episode = 20 for d = 5 and p_error =0.1 
 rl = RL(Network=NETWORK,
         Network_name=NETWORK_FILE_NAME,
         system_size=SYSTEM_SIZE,
@@ -43,7 +44,7 @@ rl = RL(Network=NETWORK,
         replay_memory_capacity=20000, 
         learning_rate=0.00025,
         discount_factor=0.95,
-        max_nbr_actions_per_episode=30,
+        max_nbr_actions_per_episode=20,
         device=device,
         replay_memory='uniform')   # proportional  
                                         # uniform

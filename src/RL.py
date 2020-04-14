@@ -158,7 +158,7 @@ class RL():
 
             start = time.time()
             #last_best_action = None
-            print('_____________________________________')
+            #print('_____________________________________')
             #mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
             mcts = MCTS_Rollout2('cpu', self.tree_args, copy.deepcopy(self.toric), None)
             end = time.time()
@@ -168,7 +168,7 @@ class RL():
             #simulations = [100, 10]
             # solve one episode
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
-                print('-------------------------------------')
+                #print('-------------------------------------')
                 num_of_steps_per_episode += 1
                 num_of_epsilon_cpuct_steps += 1
                 steps_counter += 1
@@ -176,10 +176,10 @@ class RL():
 
                 #mcts.args['num_simulations']  = simulations[simulation_index]
                 # select action using epsilon greedy policy
-                start = time.time()
-                Qvals, perspectives, actions, best_action, last_best_action_array = mcts.get_qs_actions()
-                end = time.time()
-                print('Run MCTS:',end-start,' s')
+                #start = time.time()
+                Qvals, perspectives, actions, best_action = mcts.get_qs_actions()
+                #end = time.time()
+                #print('Run MCTS:',end-start,' s')
                 #only put the perspectives that have been visited more than 1 time in the memory buffer
                 Qvals, perspectives = mcts.get_memory_Qvals(Qvals, perspectives, actions, nr_min_visits=1)
 
@@ -262,7 +262,7 @@ class RL():
     def prediction(self, num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH=None, plot_one_episode=False, cpuct=0.0,
         show_network=False, show_plot=False, prediction_list_p_error=float, minimum_nbr_of_qubit_errors=0, print_Q_values=False, save_prediction=True):
         # load network for prediction and set eval mode
-        self.tree_args['cpuct'] = cpuct
+        #self.tree_args['cpuct'] = cpuct
         if PATH != None:
             self.load_network(PATH)
         self.model.eval()

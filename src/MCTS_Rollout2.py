@@ -77,10 +77,16 @@ class MCTS_Rollout2():
             for j in all_Qsa[i]:
                 if j > maxQ and j !=0:
                     maxQ = j
-        index_max = np.where(all_Qsa==maxQ)
-        index_max = (index_max[0][0], index_max[1][0])
-        best_action1 = actions[index_max[0]][index_max[1]]
-
+        
+        try:
+            index_max = np.where(all_Qsa==maxQ)
+            index_max = (index_max[0][0], index_max[1][0])
+            best_action1 = actions[index_max[0]][index_max[1]]
+        except ValueError:
+            rand_index1 = random.randint(0,len(actions))
+            rand_index2 = random.randint(0,2)         
+            best_action1 = actions[rand_index1][rand_index2]
+        
         ##### Array of up to 10 of previous actions chosen by MCTS 
         self.last_best_action_array.append(best_action1)
         if len(self.last_best_action_array) == 11:
@@ -97,7 +103,7 @@ class MCTS_Rollout2():
         perspectives = self.generate_perspective(self.args['grid_shift'], self.syndrom)
         perspectives = Perspective(*zip(*perspectives)).perspective
 
-        return all_Qsa, perspectives, actions, best_action, self.last_best_action_array
+        return all_Qsa, perspectives, actions, best_action
 
     def search(self, state, actions_taken, root_state, toric_code):
         with torch.no_grad():
@@ -443,8 +449,14 @@ class MCTS_Rollout2():
                 if j == second_maxQ:
                     index_of_second_maxes.append((i,n))
                 n += 1
-        rand_index = index_of_second_maxes[random.randint(0, len(index_of_second_maxes)-1)]              
-        best_action = actions[rand_index[0]][rand_index[1]]
+        
+        try:
+            rand_index = index_of_second_maxes[random.randint(0, len(index_of_second_maxes)-1)]              
+            best_action = actions[rand_index[0]][rand_index[1]]
+        except ValueError:
+            rand_index1 = random.randint(0,len(actions))
+            rand_index2 = random.randint(0,2)         
+            best_action = actions[rand_index1][rand_index2]
         
         # "flip" values in q matrix
         all_Qsa[index_max[0]][index_max[1]] = second_maxQ
