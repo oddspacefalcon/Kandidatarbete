@@ -69,11 +69,13 @@ class RL():
         
         
         ########################################## Set Parameters ##########################################            
-        # d = 3, disscount_backprop = 0.9, num_sim = 50, cpuct = np.sqrt(2),            
-        # d = 5, disscount_backprop = 0.9, num_sim = 120, cpuct = np.sqrt(2)              
-        # d = 9, disscount_backprop = 0.9, num_sim = 110, cpuct = np.sqrt(2)
+        # d = 3, disscount_backprop = 0.9, num_sim = 50,            
+        # d = 5, disscount_backprop = 0.9, num_sim = 70,  
+        # d = 7, disscount_backprop = 0.9, num_sim = 90,            
+        # d = 9, disscount_backprop = 0.9, num_sim = 110, 
+        num_sim = 70  #Beror på system size
+
         disscount_backprop = 0.9 # OK
-        num_sim = 70  
         cpuct = np.sqrt(2) #OK
         reward_multiplier = 100 #OK
         self.tree_args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': self.system_size//2, 'discount_factor':disscount_backprop, \
@@ -287,10 +289,15 @@ class RL():
                 self.toric = Toric_code(self.system_size)
                 #self.toric.generate_random_error(p_error)
                 
+                self.toric.generate_random_error(p_error)
+                ############################################
+                '''
                 if minimum_nbr_of_qubit_errors == 0:
                     self.toric.generate_random_error(p_error)
                 else:
                     self.toric.generate_n_random_errors(minimum_nbr_of_qubit_errors)
+                '''
+                #############################################
                 
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
                 # plot one episode
@@ -352,7 +359,7 @@ class RL():
             self.Nr_epoch = i+1
             print('training done, epoch: ', i+1)
             # evaluate network
-            '''
+            
             error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, epsilon=0.0, cpuct=0.0,
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error,                                                                                                                                                                        save_prediction=True,
                                                                                                                                                                         num_of_steps=num_of_steps_prediction)
@@ -362,7 +369,7 @@ class RL():
             # save training settings in txt file 
             np.savetxt(directory_path + '/data_all.txt', data_all, 
                 header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, p_error_train, number_of_predictions, ground_state_list, average_number_of_steps_list, number_of_failed_syndroms, error_corrected_list', delimiter=',', fmt="%s")
-            '''
+            
             # save network
             step = (i + 1) * training_steps
             PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{5}_optimizer_{4}__steps_{3}_learning_rate_{6}.pt'.format(

@@ -27,7 +27,7 @@ class MCTS_Rollout2():
         self.Nsa = {}        # stores #times edge s,a was visited
         self.Ns = {}        # stores #times board s was visited
         self.Wsa = {}         # stores total value policy for node
-        self.device = device # 'cpu' or 'cuda'
+        self.device = device # 'cpu' or 'cuda' 
         self.actions = []
         self.loop_check = set() # set that stores state action pairs
         self.system_size = self.syndrom.shape[1]
@@ -48,7 +48,6 @@ class MCTS_Rollout2():
         self.num_backprop = 0
         self.layer = 0
     
-
     def get_qs_actions(self):
 
         size = self.system_size
@@ -99,7 +98,6 @@ class MCTS_Rollout2():
         perspectives = Perspective(*zip(*perspectives)).perspective
 
         return all_Qsa, perspectives, actions, best_action, self.last_best_action_array
-    
 
     def search(self, state, actions_taken, root_state, toric_code):
         with torch.no_grad():

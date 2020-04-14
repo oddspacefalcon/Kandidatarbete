@@ -40,7 +40,6 @@ network = NN_11
 #NETWORK_FILE_NAME = 'Size_5_NN_11' #Win rate 0.6999, P=0.15
 NETWORK_FILE_NAME = 'size_5_size_5_NN_11_MCTS_Rollout_epoch_11_memory_uniform_optimizer_Adam__steps_5500_learning_rate_0.00025'
 
-
 num_of_predictions = 1000
 
 # initialize RL class
@@ -51,7 +50,7 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.05]
+prediction_list_p_error = [0.03]
 # generate syndrome with a fixed amount of errors 
 minimum_nbr_of_qubit_errors = int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
@@ -70,7 +69,7 @@ error_corrected_list, ground_state_list, average_number_of_steps_list, failed_sy
     PATH=PATH2, 
     prediction_list_p_error=prediction_list_p_error,
     minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
-    plot_one_episode=False)
+    plot_one_episode=True) # FÖR att plotta
 
 # runtime of prediction
 runtime = time.time()-start

@@ -69,32 +69,32 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 num_of_steps_per_episode += 1
 
                 # choose MCTS action
-                mcts = MCTS_Rollout2('cpu', args, last_best_action_array, copy.deepcopy(toric), None) #Classic rollout MCTS 
+                mcts = MCTS_Rollout2('cpu', args, copy.deepcopy(toric), None) #Classic rollout MCTS 
                 _,_,_,action , last_best_action_array = mcts.get_qs_actions()
 
                 # choose MCTS action
                 #mcts = MCTS_Rollout('cpu', args, copy.deepcopy(toric), None, last_best_action) #Classic rollout MCTS 
                 #_,_,_,action , last_best_action = mcts.get_qs_actions()
 
-                '''
+                
                 print('___________________________________________________')
                 print(toric.current_state)
                 print('-----------')
                 print('best action', action)
                 add1 = np.sum(toric.current_state)
-                '''
+                
 
                 prev_action = action
                 toric.step(action)
                 toric.current_state = toric.next_state
                 terminal_state = toric.terminal_state(toric.current_state)
                 
-                '''
+                
                 print(toric.current_state)
                 add2 = np.sum(toric.current_state)
                 print('sum diff: ', add1-add2)
                 print('Tot err left: ', add2)
-                '''
+                
 
                 if plot_one_episode == True and j == 0 and i == 0:
                     toric.plot_toric_code(toric.current_state, 'step_'+str(num_of_steps_per_episode))
@@ -130,14 +130,13 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 # d = 7, P_error = 0.1, disscount_backprop = 0.9, num_sim = 90
 # d = 9, P_error = 0.1, disscount_backprop = 0.9, num_sim = 110
 
-system_size = 5
-P_error = 0.1
-disscount_backprop = 0.9 # OK
-num_sim = 70  #50
-num_of_predictions = 50
+system_size = 11
+num_sim = 110  #50
+num_of_predictions = 2
 
 #########################################################################################################################################
-
+P_error = 0.1
+disscount_backprop = 0.9
 cpuct = np.sqrt(2) #OK
 reward_multiplier = 100
 device = 'cuda' #OK
