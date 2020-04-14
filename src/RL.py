@@ -23,6 +23,8 @@ from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from .util import incremental_mean, convert_from_np_to_tensor, Transition, Action, Qval_Perspective
 from .MCTS import MCTS
 from .MCTS_Rollout import MCTS_Rollout
+from src.MCTS_Rollout2 import MCTS_Rollout2
+
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
@@ -68,12 +70,12 @@ class RL():
         
         ########################################## Set Parameters ##########################################            
         # d = 3, disscount_backprop = 0.9, num_sim = 50, cpuct = np.sqrt(2),            
-        # d = 5, disscount_backprop = 0.9, num_sim = 70, cpuct = np.sqrt(2)              
+        # d = 5, disscount_backprop = 0.9, num_sim = 120, cpuct = np.sqrt(2)              
         # d = 9, disscount_backprop = 0.9, num_sim = 110, cpuct = np.sqrt(2)
         disscount_backprop = 0.9 # OK
-        num_sim = 50  #50
+        num_sim = 70  
         cpuct = np.sqrt(2) #OK
-        reward_multiplier = 100
+        reward_multiplier = 100 #OK
         self.tree_args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': self.system_size//2, 'discount_factor':disscount_backprop, \
             'reward_multiplier':reward_multiplier}
         #####################################################################################################
@@ -145,7 +147,6 @@ class RL():
         # main loop over training steps
         while iteration < training_steps:
             
-
             num_of_steps_per_episode = 0
             # initialize syndrom
             self.toric = Toric_code(self.system_size)
@@ -153,41 +154,44 @@ class RL():
             self.toric.generate_random_error(self.p_error)
             terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-            #mcts = MCTS(self.model, self.device, self.tree_args, toric_code=self.toric)
-            #mcts = MCTS_Rollout('cpu', self.tree_args, toric_code=self.toric)
-            last_best_action = None
-            mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
+            start = time.time()
+            #last_best_action = None
+            print('_____________________________________')
+            #mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
+            mcts = MCTS_Rollout2('cpu', self.tree_args, copy.deepcopy(self.toric), None)
+            end = time.time()
+            print('Initiate MCTS:',end-start,' s')
             self.model.eval()
 
-            simulations = [100, 10]
-
+            #simulations = [100, 10]
             # solve one episode
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
-                
-                simulation_index = num_of_steps_per_episode if num_of_steps_per_episode < len(simulations) else len(simulations)-1
-
+                print('-------------------------------------')
                 num_of_steps_per_episode += 1
                 num_of_epsilon_cpuct_steps += 1
                 steps_counter += 1
                 iteration += 1
-                
 
-                mcts.args['num_simulations']  = simulations[simulation_index]
+                #mcts.args['num_simulations']  = simulations[simulation_index]
                 # select action using epsilon greedy policy
-                
-                Qvals, perspectives, actions, best_action, last_best_action = mcts.get_qs_actions()
-                
+                start = time.time()
+                Qvals, perspectives, actions, best_action, last_best_action_array = mcts.get_qs_actions()
+                end = time.time()
+                print('Run MCTS:',end-start,' s')
                 #only put the perspectives that have been visited more than 1 time in the memory buffer
                 Qvals, perspectives = mcts.get_memory_Qvals(Qvals, perspectives, actions, nr_min_visits=1)
 
                 print('training steps:', iteration, 'Epoch nr:', self.Nr_epoch+1)
 
                 mcts.next_step(best_action)
-
+                start = time.time()
                 # save transition in memory
                 for Qs, perspective in zip(Qvals, perspectives):
                     self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
+                end = time.time()
+                #print('save transition in memory:',end-start,' s')
   
+                start = time.time()
                 # experience replay
                 if steps_counter > replay_start_size:
                     update_counter += 1
@@ -196,16 +200,26 @@ class RL():
                                             optimizer,
                                             batch_size) 
                     self.model.eval()
-
+                end = time.time()
+                #print('experience replay:',end-start,' s')
+ 
+                start = time.time()
                 # update epsilon and cpuct
                 if (update_counter % epsilon_cpuct_update == 0):
                     epsilon = np.round(np.maximum(epsilon - epsilon_decay, epsilon_end), 3)
                     self.tree_args['cpuct'] = np.round(np.maximum(self.tree_args['cpuct'] - cpuct_decay, cpuct_end), 3)         
+                end = time.time()
+                #print('update epsilon and cpuct:',end-start,' s')
 
+                start = time.time()
                 # set next_state to new state 
-                
+                self.toric.step(best_action)
                 terminal_state = self.toric.terminal_state(self.toric.next_state)
-
+                self.toric.current_state = self.toric.next_state
+                end = time.time()
+                #print('set next_state to new state:',end-start,' s')
+                
+            
     def get_reward(self):
         terminal = np.all(self.toric.next_state==0)
         if terminal == True:
@@ -271,11 +285,13 @@ class RL():
                 terminal_state = 0
                 # generate random syndrom
                 self.toric = Toric_code(self.system_size)
-
+                #self.toric.generate_random_error(p_error)
+                
                 if minimum_nbr_of_qubit_errors == 0:
                     self.toric.generate_random_error(p_error)
                 else:
                     self.toric.generate_n_random_errors(minimum_nbr_of_qubit_errors)
+                
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
                 # plot one episode
                 if plot_one_episode == True and j == 0 and i == 0:
@@ -336,6 +352,7 @@ class RL():
             self.Nr_epoch = i+1
             print('training done, epoch: ', i+1)
             # evaluate network
+            '''
             error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, epsilon=0.0, cpuct=0.0,
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error,                                                                                                                                                                        save_prediction=True,
                                                                                                                                                                         num_of_steps=num_of_steps_prediction)
@@ -345,10 +362,12 @@ class RL():
             # save training settings in txt file 
             np.savetxt(directory_path + '/data_all.txt', data_all, 
                 header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, p_error_train, number_of_predictions, ground_state_list, average_number_of_steps_list, number_of_failed_syndroms, error_corrected_list', delimiter=',', fmt="%s")
+            '''
             # save network
             step = (i + 1) * training_steps
             PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{5}_optimizer_{4}__steps_{3}_learning_rate_{6}.pt'.format(
                 i+1, self.network_name, self.system_size, step, optimizer, self.replay_memory, self.learning_rate)
             self.save_network(PATH)
             
-        return error_corrected_list
+            
+        return #error_corrected_list

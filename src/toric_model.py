@@ -20,7 +20,6 @@ class Toric_code():
                                                                                             # pauli_y = 2
                                                                                             # pauli_z = 3
 
-
     def generate_random_error(self, p_error):
         for i in range(2):
             qubits = np.random.uniform(0, 1, size=(self.system_size, self.system_size))

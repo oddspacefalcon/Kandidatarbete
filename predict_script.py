@@ -15,15 +15,33 @@ device = 'cuda'
 ##########################################################################
 
 # common system sizes are 3,5,7 and 9. Grid size must be odd! 
-system_size = 3
+system_size = 5
 
 # valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 network = NN_11
+# Win rate for agent d= 3. 
+# steps 1000 -> 0.23
+# steps 2000 -> 0.43
+# steps 3000 -> 0.365
+# steps 4000 -> 0.6
+# steps 5000 -> 0.7
+# steps 6000 -> 0.828
+# steps 7000 -> 0.8
+# steps 8000 -> 0.86
+# steps 9000 -> 0.88 # BEST
+# steps 9500 -> 0.86
+# steps 10000 -> 0.87
+
+# Win rate for agent d = 5, num of predictions = 1000.
+# steps 5500 -> 0.925
+
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'size_3_NN_11_MCTS_Rollout_epoch_18_memory_uniform_optimizer_Adam__steps_9000_learning_rate_0.00025'
+#NETWORK_FILE_NAME = 'Size_5_NN_11' #Win rate 0.6999, P=0.15
+NETWORK_FILE_NAME = 'size_5_size_5_NN_11_MCTS_Rollout_epoch_11_memory_uniform_optimizer_Adam__steps_5500_learning_rate_0.00025'
 
-num_of_predictions = 500
+
+num_of_predictions = 1000
 
 # initialize RL class
 rl = RL(Network=network,
