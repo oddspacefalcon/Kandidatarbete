@@ -19,28 +19,13 @@ system_size = 5
 
 # valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 network = NN_11
-# Win rate for agent d= 3. 
-# steps 1000 -> 0.23
-# steps 2000 -> 0.43
-# steps 3000 -> 0.365
-# steps 4000 -> 0.6
-# steps 5000 -> 0.7
-# steps 6000 -> 0.828
-# steps 7000 -> 0.8
-# steps 8000 -> 0.86
-# steps 9000 -> 0.88 # BEST
-# steps 9500 -> 0.86
-# steps 10000 -> 0.87
-
-# Win rate for agent d = 5, num of predictions = 1000.
-# steps 5500 -> 0.925
-
 
 # this file is stored in the network folder and contains the trained agent.  
 #NETWORK_FILE_NAME = 'Size_5_NN_11' #Win rate 0.6999, P=0.15
-NETWORK_FILE_NAME = 'size_5_size_5_NN_11_MCTS_Rollout_epoch_11_memory_uniform_optimizer_Adam__steps_5500_learning_rate_0.00025'
+NETWORK_FILE_NAME = 'size_5_Go_size_5_NN_11_steps_epoch_7_steps_7000' #Win rate: 0.961, P=0.05
+                                                                      #          0.75, P = 0.1
 
-num_of_predictions = 1000
+num_of_predictions = 100
 
 # initialize RL class
 rl = RL(Network=network,
@@ -50,13 +35,13 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.15]
+prediction_list_p_error = [0.02]
 # generate syndrome with a fixed amount of errors 
 minimum_nbr_of_qubit_errors = int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
 # Generate folder structure, all results are stored in the data folder 
 timestamp = time.strftime("%y_%m_%d__%H_%M_%S__")
-PATH = 'data/prediction__' +str(NETWORK_FILE_NAME) +'__'+  timestamp
+PATH = 'Results/prediction__' +str(NETWORK_FILE_NAME) +'__'+  timestamp
 if not os.path.exists(PATH):
     os.makedirs(PATH)
 
@@ -84,5 +69,8 @@ print(len(failed_syndroms)/2, 'failed syndroms out of',num_of_predictions, 'pred
 
   
 # save training settings in txt file 
-data_all = np.array([[NETWORK_FILE_NAME, num_of_predictions, error_corrected_list[0], ground_state_list[0],average_number_of_steps_list[0], len(failed_syndroms)/2, runtime]])
-np.savetxt(PATH + '/data_all.txt', data_all, header='network, failure_rate, error corrected, ground state conserved, average number of steps, mean q value, number of failed syndroms, runtime (h)', delimiter=',', fmt="%s")
+data_all = np.array([[NETWORK_FILE_NAME, num_of_predictions, error_corrected_list[0], ground_state_list[0],average_number_of_steps_list[0], len(failed_syndroms)/2, runtime, prediction_list_p_error[0], win_rate ]])
+data_result = np.array([[prediction_list_p_error[0], win_rate]])
+np.savetxt(PATH + '/data_all.txt', data_all, header='network, failure_rate, error corrected, ground state conserved, average number of steps, mean q value, number of failed syndroms, runtime (h), Prob error, Win Rate', delimiter=',', fmt="%s")
+np.savetxt(PATH + '/data_result.txt', data_result, delimiter=',', fmt="%s")
+

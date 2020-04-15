@@ -162,7 +162,7 @@ class RL():
             #mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
             mcts = MCTS_Rollout2('cpu', self.tree_args, copy.deepcopy(self.toric), None)
             end = time.time()
-            print('Initiate MCTS:',end-start,' s')
+            #print('Initiate MCTS:',end-start,' s')
             self.model.eval()
 
             #simulations = [100, 10]
@@ -218,6 +218,7 @@ class RL():
                 self.toric.step(best_action)
                 terminal_state = self.toric.terminal_state(self.toric.next_state)
                 self.toric.current_state = self.toric.next_state
+                #terminal_state = 0
                 end = time.time()
                 #print('set next_state to new state:',end-start,' s')
                 

@@ -33,7 +33,7 @@ SYSTEM_SIZE = 5
 continue_training = False
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'A_Size_5_NN_11_numsim_70'
+NETWORK_FILE_NAME = 'Go_size_5_NN_11_steps'
 start = start = time.time() 
 # initialize RL class and training parameters
 # max_nbr_actions_per_episode = 20 for d = 5 and p_error =0.1 
@@ -68,7 +68,7 @@ if continue_training == True:
 num_epochs = 100
 
 # train for n epochs the agent (test parameters)
-rl.train_for_n_epochs(training_steps=500,
+rl.train_for_n_epochs(training_steps=1000,
                     num_of_predictions=100,
                     num_of_steps_prediction=75,
                     epochs=num_epochs,
