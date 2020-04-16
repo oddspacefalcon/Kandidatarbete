@@ -47,6 +47,7 @@ class MCTS_Rollout2():
 
         self.num_backprop = 0
         self.layer = 0
+        self.rollout_time = 0
     
     def get_qs_actions(self):
 
@@ -55,7 +56,7 @@ class MCTS_Rollout2():
         actions_taken = np.zeros((2,size,size), dtype=int)
         
         #.............................Search...............................
-        
+        #print('__________________')
         for i in range(self.args['num_simulations']):
             #print('__________________')
             #print('__________________')
@@ -66,7 +67,7 @@ class MCTS_Rollout2():
             self.states_to_leafnode.clear()
             self.actions_to_leafnode.clear()
             self.actions_to_leafnode_nostring.clear()
-        
+        #print('__________________')
         #..............................Max Qsa .............................
         actions = self.get_possible_actions(self.syndrom)
         all_Qsa = np.array([[self.Qsa[(s,str(a))] if (s,str(a)) in self.Qsa else 0 for a in position] for position in actions])
@@ -81,12 +82,12 @@ class MCTS_Rollout2():
         try:
             index_max = np.where(all_Qsa==maxQ)
             index_max = (index_max[0][0], index_max[1][0])
-            best_action1 = actions[index_max[0]][index_max[1]]
+            best_action = actions[index_max[0]][index_max[1]]
         except ValueError:
             rand_index1 = random.randint(0,len(actions))
             rand_index2 = random.randint(0,2)         
-            best_action1 = actions[rand_index1][rand_index2]
-        
+            best_action = actions[rand_index1][rand_index2]
+        '''
         ##### Array of up to 10 of previous actions chosen by MCTS 
         self.last_best_action_array.append(best_action1)
         if len(self.last_best_action_array) == 11:
@@ -99,10 +100,10 @@ class MCTS_Rollout2():
         if equal != 2:
             self.last_best_action_array[len(self.last_best_action_array)-1] = best_action
         #####
+        '''
 
         perspectives = self.generate_perspective(self.args['grid_shift'], self.syndrom)
         perspectives = Perspective(*zip(*perspectives)).perspective
-
         return all_Qsa, perspectives, actions, best_action
 
     def search(self, state, actions_taken, root_state, toric_code):
@@ -249,9 +250,19 @@ class MCTS_Rollout2():
         return rand_action
 
     def rollout(self, perspective_list, toric_code, actions_taken):
-        # get reward for every possible action from leaf node           
+        # get reward for every possible action from leaf node  
+        #print('-------------------') 
+        start = time.time()        
         actions = self.get_possible_actions(self.syndrom)
         reward = []
+
+        # Dont have to go through all actions only 20*3 of them
+        while True:
+            if len(actions) > 20:
+                del actions[random.randint(0, len(actions)-1)]
+            else:
+                break
+
         for i in range(len(actions)):
             for j in actions[i]:   
                 toric = copy.deepcopy(toric_code)
@@ -262,6 +273,10 @@ class MCTS_Rollout2():
                 
                 v = self.get_reward(next_state, current_state, toric)
                 reward.append(v)
+        end = time.time()
+        self.rollout_time +=  (end-start)
+        #print('Time in rollout tot', self.rollout_time)
+       
         v = max(reward) #sum(reward)/len(reward)
 
         return v

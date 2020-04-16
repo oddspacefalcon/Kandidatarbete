@@ -7,7 +7,7 @@ import _pickle as cPickle
 from src.RL import RL
 from src.toric_model import Toric_code
 
-from NN import NN_11, NN_17
+from NN import NN_11, NN_17, NN_32
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 
 
@@ -23,26 +23,27 @@ device = 'cuda' #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #   ResNet50
 #   ResNet101
 #   ResNet152
-NETWORK = NN_11
+NETWORK = ResNet34
 
 # common system sizes are 3,5,7 and 9 
 # grid size must be odd! 
-SYSTEM_SIZE = 5
+SYSTEM_SIZE = 11
 
 # For continuing the training of an agent
 continue_training = False
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'Go_size_5_NN_11_steps'
+NETWORK_FILE_NAME = 'Size_11_ResNet34'
 start = start = time.time() 
 # initialize RL class and training parameters
+
 # max_nbr_actions_per_episode = 20 for d = 5 and p_error =0.1 
 rl = RL(Network=NETWORK,
         Network_name=NETWORK_FILE_NAME,
         system_size=SYSTEM_SIZE,
         p_error=0.1,
         replay_memory_capacity=20000, 
-        learning_rate=0.00025,
+        learning_rate=0.0005,
         discount_factor=0.95,
         max_nbr_actions_per_episode=20,
         device=device,
@@ -65,10 +66,10 @@ if continue_training == True:
     PATH2 = 'network/'+str(NETWORK_FILE_NAME)+'.pt'
     rl.load_network(PATH2)
 
-num_epochs = 100
+num_epochs = 30
 
 # train for n epochs the agent (test parameters)
-rl.train_for_n_epochs(training_steps=1000,
+rl.train_for_n_epochs(training_steps=100,
                     num_of_predictions=100,
                     num_of_steps_prediction=75,
                     epochs=num_epochs,

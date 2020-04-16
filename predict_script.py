@@ -22,10 +22,11 @@ network = NN_11
 
 # this file is stored in the network folder and contains the trained agent.  
 #NETWORK_FILE_NAME = 'Size_5_NN_11' #Win rate 0.6999, P=0.15
-NETWORK_FILE_NAME = 'size_5_Go_size_5_NN_11_steps_epoch_7_steps_7000' #Win rate: 0.961, P=0.05
-                                                                      #          0.75, P = 0.1
+#NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000' #Win rate: 0.961, P=0.05
+#NETWORK_FILE_NAME = 'Size_5_NN_11_steps_7150' #Win rate: 0.964, P=0.05
+                                                                      
 
-num_of_predictions = 100
+num_of_predictions = 1000
 
 # initialize RL class
 rl = RL(Network=network,
@@ -35,9 +36,9 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.02]
+prediction_list_p_error = [0.05]
 # generate syndrome with a fixed amount of errors 
-minimum_nbr_of_qubit_errors = int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
+minimum_nbr_of_qubit_errors = 0 #int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
 # Generate folder structure, all results are stored in the data folder 
 timestamp = time.strftime("%y_%m_%d__%H_%M_%S__")

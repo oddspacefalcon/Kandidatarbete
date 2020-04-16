@@ -51,13 +51,13 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 
             # generate random syndrom
             toric = Toric_code(system_size)
-            toric.generate_random_error(p_error)
-            '''
+            #toric.generate_random_error(p_error)
+            
             if minimum_nbr_of_qubit_errors == 0:
                 toric.generate_random_error(p_error)
             else:
                 toric.generate_n_random_errors(minimum_nbr_of_qubit_errors)
-            '''
+            
             terminal_state = toric.terminal_state(toric.current_state)
             # plot one episode
             if plot_one_episode == True and j == 0 and i == 0:
@@ -132,8 +132,8 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 # d = 7, P_error = 0.1, disscount_backprop = 0.9, num_sim = 90
 # d = 9, P_error = 0.1, disscount_backprop = 0.9, num_sim = 110
 
-system_size = 5
-num_sim = 50  #50
+system_size = 11
+num_sim = 100  #50
 num_of_predictions = 100
 
 #########################################################################################################################################
@@ -144,7 +144,7 @@ reward_multiplier = 100
 device = 'cuda' #OK
 grid_shift = system_size//2 #OK
 prediction_list_p_error = [P_error] #OK
-minimum_nbr_of_qubit_errors = int(system_size/2)+1
+minimum_nbr_of_qubit_errors = 0 #int(system_size/2)+1
 args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': system_size//2, 'discount_factor':disscount_backprop, \
     'reward_multiplier':reward_multiplier}
 
@@ -154,7 +154,7 @@ error_corrected_list, ground_state_list, average_number_of_steps_list, failed_sy
     num_of_steps=50, 
     prediction_list_p_error=prediction_list_p_error,
     minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
-    plot_one_episode=False,
+    plot_one_episode=True,
     system_size = system_size)
 
 print(error_corrected_list, 'error corrected')

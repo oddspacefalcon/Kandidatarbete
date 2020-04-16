@@ -6,6 +6,6 @@ c = True
 d = False
 k = True
 E = c+d+k +3
-print(random.randint(0,1))
+print(round(random.uniform(0.05,0.15), 2))
 
 

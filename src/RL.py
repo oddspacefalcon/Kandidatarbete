@@ -69,11 +69,10 @@ class RL():
         
         
         ########################################## Set Parameters ##########################################            
-        # d = 3, disscount_backprop = 0.9, num_sim = 50,            
         # d = 5, disscount_backprop = 0.9, num_sim = 70,  
         # d = 7, disscount_backprop = 0.9, num_sim = 90,            
         # d = 9, disscount_backprop = 0.9, num_sim = 110, 
-        num_sim = 70  #Beror på system size
+        num_sim = 110  #Beror på system size
 
         disscount_backprop = 0.9 # OK
         cpuct = np.sqrt(2) #OK
@@ -152,16 +151,20 @@ class RL():
             num_of_steps_per_episode = 0
             # initialize syndrom
             self.toric = Toric_code(self.system_size)
+           
+            # Generate random syndroms over interval P_error = [0.05, 0.15]
+            #self.p_error = round(random.uniform(0.05,0.1), 2)
+            
             # generate syndroms
             self.toric.generate_random_error(self.p_error)
             terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-            start = time.time()
+            #start = time.time()
             #last_best_action = None
             #print('_____________________________________')
             #mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
             mcts = MCTS_Rollout2('cpu', self.tree_args, copy.deepcopy(self.toric), None)
-            end = time.time()
+            #end = time.time()
             #print('Initiate MCTS:',end-start,' s')
             self.model.eval()
 
@@ -186,14 +189,10 @@ class RL():
                 print('training steps:', iteration, 'Epoch nr:', self.Nr_epoch+1)
 
                 mcts.next_step(best_action)
-                start = time.time()
                 # save transition in memory
                 for Qs, perspective in zip(Qvals, perspectives):
                     self.memory.save(Qval_Perspective(deepcopy(Qs), deepcopy(perspective)), 10000)
-                end = time.time()
-                #print('save transition in memory:',end-start,' s')
   
-                start = time.time()
                 # experience replay
                 if steps_counter > replay_start_size:
                     update_counter += 1
@@ -202,24 +201,17 @@ class RL():
                                             optimizer,
                                             batch_size) 
                     self.model.eval()
-                end = time.time()
-                #print('experience replay:',end-start,' s')
  
-                start = time.time()
                 # update epsilon and cpuct
                 if (update_counter % epsilon_cpuct_update == 0):
                     epsilon = np.round(np.maximum(epsilon - epsilon_decay, epsilon_end), 3)
                     self.tree_args['cpuct'] = np.round(np.maximum(self.tree_args['cpuct'] - cpuct_decay, cpuct_end), 3)         
-                end = time.time()
-                #print('update epsilon and cpuct:',end-start,' s')
 
-                start = time.time()
                 # set next_state to new state 
-                self.toric.step(best_action)
-                terminal_state = self.toric.terminal_state(self.toric.next_state)
-                self.toric.current_state = self.toric.next_state
-                #terminal_state = 0
-                end = time.time()
+                #self.toric.step(best_action)
+                #terminal_state = self.toric.terminal_state(self.toric.next_state)
+                #self.toric.current_state = self.toric.next_state
+                terminal_state = 0
                 #print('set next_state to new state:',end-start,' s')
                 
             
@@ -350,6 +342,7 @@ class RL():
         batch_size=32, replay_start_size=32):
         
         data_all = np.zeros((1, 15))
+        data_result = np.zeros((1, 2))
 
         for i in range(epochs):
             self.train(training_steps=training_steps,
@@ -371,6 +364,10 @@ class RL():
             np.savetxt(directory_path + '/data_all.txt', data_all, 
                 header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, p_error_train, number_of_predictions, ground_state_list, average_number_of_steps_list, number_of_failed_syndroms, error_corrected_list', delimiter=',', fmt="%s")
             
+            data_result = np.append(data_result, np.array([[training_steps * (i+1), error_corrected_list[0]]]), axis=0)
+            np.savetxt(directory_path + '/data_result.txt', data_result, 
+                header='tot_training_steps, error_corrected', delimiter=',  ', fmt="%s")
+
             # save network
             step = (i + 1) * training_steps
             PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{5}_optimizer_{4}__steps_{3}_learning_rate_{6}.pt'.format(

@@ -1,0 +1,2 @@
+# network, failure_rate, error corrected, ground state conserved, average number of steps, mean q value, number of failed syndroms, runtime (h), Prob error, Win Rate
+Size_5_NN_11_steps_7150,1000,0.986,0.966,3.7,36.0,0.008102234138382805,0.05,0.964
