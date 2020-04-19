@@ -101,7 +101,7 @@ class MCTS_vector():
         # np.arrays unhashable, needs string
 
         '''Create n strings from n states'''
-        state_strings = np.array([str(state) for state in continuing_states])
+        state_strings = np.array([state.tostate() for state in continuing_states])
 
         # ............................If leaf node......................................
         '''av de i continuing_view --> kolla om dess stater har Q-värden här'''
@@ -202,23 +202,12 @@ class MCTS_vector():
         # ..........................Get best action...................................
         t0 = time.clock()
         #Göra använda numpy för att göra UBC kalkyleringen snabbare.
-        '''Behöver kolla igenom alla icke leaf nodes'''
-        '''Behöver sedan stoppa inn en array med Ps[s]'s och array med states (icke-leaf-nodes)'''
-        perspective_list = [self.generate_perspective(self.args['grid_shift'], state) for state in continuing_states]
-        number_of_perspectives = [len(perspective) for perspective in perspective_list]
-        perspectives = [Perspective(*zip(*perspective)) for perspective in perspective_list]
-        batch_perspectives = [np.array(perspective.perspective) for perspective in perspectives]
-
-        batch_position_actions = [perspective.position for perspective in perspectives]
-
-        actions = [[[Action(np.array(p_pos), x) for x in range(1,4)] for p_pos in position_actions] for position_actions in batch_position_actions]
-
         Ps_arr = np.array([self.Ps[s] for s in continuing_state_strings])
 
 
         indecies = np.where(~self.is_leaf & ~self.is_terminal)[0]
 
-        UpperConfidence = self.UCBpuct(Ps_arr, actions, continuing_state_strings, indecies)
+        UpperConfidence = self.UCBpuct(Ps_arr, indecies)
 
         #Väljer ut action med högst UCB som inte har valts tidigare (i denna staten):
 

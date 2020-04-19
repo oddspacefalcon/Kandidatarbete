@@ -129,7 +129,6 @@ class MCTS():
         UpperConfidence = self.UCBpuct(self.Ps[s], s)
 
         #Väljer ut action med högst UCB som inte har valts tidigare (i denna staten):
-        
         while True:
             perspective_index, action_index = np.unravel_index(np.argmax(UpperConfidence), UpperConfidence.shape)
             
@@ -139,6 +138,9 @@ class MCTS():
             
             
             a = best_perspective_pos.tostring()
+            if(UpperConfidence[perspective_index][action_index] == -float('inf')):
+                return -1
+
             if(a not in self.loop_check):
                 self.loop_check.add(a)
                 break

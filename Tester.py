@@ -1,7 +1,7 @@
 from src.toric_model import Toric_code
 from ResNet import ResNet18, ResNet152
 from src.MCTS import MCTS
-from src.MCTS2 import MCTS2
+#from src.MCTS2 import MCTS2
 from src.util import Perspective, Action
 import torch
 import torch.nn as nn
@@ -10,40 +10,53 @@ import timeit
 import numpy as np
 import time
 
-def mcts_test():
-    for i in range(1):
+# def mcts_test():
+#     for i in range(1):
 
-        device = 'cpu'
-        system_size = 5
-        toric_code = Toric_code(system_size)
-        toric_code.generate_random_error(0.1)
+#         device = 'cpu'
+#         system_size = 5
+#         toric_code = Toric_code(system_size)
+#         toric_code.generate_random_error(0.1)
 
-        model = ResNet152()
-        args = {'cpuct': 1, 'num_simulations':10, 'grid_shift': system_size//2, 'discount_factor':0.95}
+#         model = ResNet152()
+#         args = {'cpuct': 1, 'num_simulations':10, 'grid_shift': system_size//2, 'discount_factor':0.95}
 
-        mcts = MCTS(model, device, args, toric_code)
-        mcts2 = MCTS2(model, device, args, toric_code)
-        t0 = time.process_time()
-        Qsa_max = mcts.get_Qvals()
-        print("total time mcts1: {}".format(time.process_time()-t0))
-        t0 = time.process_time()
-        Qsa_max = mcts2.get_Qvals()
-        print("total time mcts2: {}".format(time.process_time()-t0))
+#         mcts = MCTS(model, device, args, toric_code)
+#         mcts2 = MCTS2(model, device, args, toric_code)
+#         t0 = time.process_time()
+#         Qsa_max = mcts.get_Qvals()
+#         print("total time mcts1: {}".format(time.process_time()-t0))
+#         t0 = time.process_time()
+#         Qsa_max = mcts2.get_Qvals()
+#         print("total time mcts2: {}".format(time.process_time()-t0))
 
 
-        print('-------------------------')
-        print('Ts2: {}'.format(mcts2.Ts))
-        print('-------------------------')
-        print('Nrs2: {}'.format(mcts2.Nrs))
-        print('-------------------------')
-        print('visitmodel2: {}'.format(mcts2.visit_model))
-        print('-------------------------')
+#         print('-------------------------')
+#         print('Ts2: {}'.format(mcts2.Ts))
+#         print('-------------------------')
+#         print('Nrs2: {}'.format(mcts2.Nrs))
+#         print('-------------------------')
+#         print('visitmodel2: {}'.format(mcts2.visit_model))
+#         print('-------------------------')
 
 
 
         #print(mcts.Ts[3]*mcts.Nrs[3]/mcts.Nrs[2])
+def tester():
+    device = 'cpu'
+    system_size = 3
+    toric_code = Toric_code(system_size)
+    toric_code.generate_random_error(0.1)
 
-mcts_test()
+    model = ResNet18()
+    args = {'cpuct': 1, 'num_simulations': 50, 'grid_shift': system_size//2, 'discount_factor':0.95}
+
+    mcts = MCTS(model, device, args, toric_code)
+
+    Qsa_max, _, _ = mcts.get_Qvals() 
+
+tester()
+#mcts_test()
 
 def generate_perspective_time_tester():
     setup = '''from src.toric_model import Toric_code
