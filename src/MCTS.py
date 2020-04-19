@@ -28,7 +28,6 @@ class MCTS():
         self.Node = Node
         self.device = device
         self.visited_temp = [] # (str(state), a, r)
-        self.visites = []
         self.model = model
         self.num_simulations = num_simulations
         self.epsilon = epsilon
@@ -42,16 +41,15 @@ class MCTS():
                 node = node.parent
                 col = a.action - 1
                 row = next((row for row, perspective in enumerate(node.perspectives[1]) if perspective == a.position), None)
-
                 node.Q[row][col] = Qa
                 node.visited_PQ[(s, a)] = (node.perspectives[0][row], Qa)
 
     def search(self, state, node, s, visited):
         # so no computation history is saved
         with torch.no_grad():
-            
             if node.Q is None:
                 if not np.all(state.current_state == 0):
+                    # expand
                     perspectives = state.generate_perspective(self.grid_shift, state.current_state)
                     perspectives = Perspective(*zip(*perspectives))
                     batch_perspectives = np.array(perspectives.perspective)
@@ -84,13 +82,14 @@ class MCTS():
                     perspective_index = random.randint(0, qvals.shape[0] - 1)
                     action_index = random.randint(1, qvals.shape[1])
                     action = Action(node.perspectives[1][perspective_index], action_index)
-
+                # take step
                 state.step(action)
                 self.visited_temp.append((s, action, self.get_reward(state)))
                 state.current_state = state.next_state
                 s1 = np.array_str(state.current_state)
                 
                 if s1 not in node.child_nodes:
+                    # create new node
                     new_node = self.Node()
                     new_node.parent = node
                     node.child_nodes[s1] = new_node

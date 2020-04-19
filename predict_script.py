@@ -29,9 +29,9 @@ system_size = 5
 network = NN_11
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'Size_5_NN_11'
+NETWORK_FILE_NAME = 'size_5_NN_epoch_29'
 
-num_of_predictions = 1
+num_of_predictions = 10000
 
 # initialize RL class
 rl = RL(Network=network,
@@ -54,9 +54,9 @@ if not os.path.exists(PATH):
 # Path for the network to use for the prediction
 PATH2 = 'network/'+str(NETWORK_FILE_NAME)+'.pt'
 print('Prediction')
-error_corrected_list, ground_state_list, average_number_of_steps_list, mean_q_list, failed_syndroms, ground_state_list, prediction_list_p_error, failure_rate = rl.prediction(
+error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = rl.prediction(
     num_of_predictions=num_of_predictions, 
-    num_of_steps=75, 
+    num_of_steps=50, 
     PATH=PATH2, 
     prediction_list_p_error=prediction_list_p_error,
     plot_one_episode=False)
@@ -68,9 +68,8 @@ runtime = runtime / 3600
 print(error_corrected_list, 'error corrected')
 print(ground_state_list, 'ground state conserved')
 print(average_number_of_steps_list, 'average number of steps')
-print(mean_q_list, 'mean q value')
 print(runtime, 'h runtime')
   
 # save training settings in txt file 
-data_all = np.array([[NETWORK_FILE_NAME, failure_rate, num_of_predictions, error_corrected_list[0], ground_state_list[0],average_number_of_steps_list[0], mean_q_list[0], len(failed_syndroms)/2, runtime]])
-np.savetxt(PATH + '/data_all.txt', data_all, header='network, failure_rate, error corrected, ground state conserved, average number of steps, mean q value, number of failed syndroms, runtime (h)', delimiter=',', fmt="%s")
+data_all = np.array([[NETWORK_FILE_NAME, num_of_predictions, error_corrected_list[0], ground_state_list[0],average_number_of_steps_list[0], len(failed_syndroms)/2, runtime]])
+np.savetxt(PATH + '/data_all.txt', data_all, header='network, error corrected, ground state conserved, average number of steps, number of failed syndroms, runtime (h)', delimiter=',', fmt="%s")

@@ -30,9 +30,9 @@ NETWORK = NN_11
 SYSTEM_SIZE = 5
 
 # For continuing the training of an agent
-continue_training = False
+continue_training = True
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'size_5_NN_11'
+NETWORK_FILE_NAME = 'size_5_size_5_NN_11_epoch_14_memory_proportional_optimizer_Adam__steps_14000_learning_rate_0.00025'
 
 # initialize RL class and training parameters 
 rl = RL(Network=NETWORK,
@@ -66,9 +66,9 @@ if continue_training == True:
 
 # train for n epochs the agent (test parameters)
 rl.train_for_n_epochs(training_steps=1000,
-                    num_of_predictions=100,
+                    num_of_predictions=200,
                     num_of_steps_prediction=50,
-                    epochs=20,
+                    epochs=50,
                     optimizer='Adam',
                     batch_size=32,
                     directory_path = PATH,

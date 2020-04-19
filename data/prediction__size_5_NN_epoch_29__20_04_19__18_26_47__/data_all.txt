@@ -1,0 +1,2 @@
+# network, error corrected, ground state conserved, average number of steps, number of failed syndroms, runtime (h)
+size_5_NN_epoch_29,10000,0.9841,0.843,6.0,1578.0,0.04340894480546315

@@ -25,7 +25,7 @@ from .MCTS import MCTS
 
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
-                number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
+                max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
                 num_simulations=20, discount_factor=0.95, epsilon=0.1, memory_reset=150):
         # device
         self.device = device
@@ -53,11 +53,10 @@ class RL():
         if Network == ResNet18 or Network == ResNet34 or Network == ResNet50 or Network == ResNet101 or Network == ResNet152:
             self.model = self.network()
         else:
-            self.model = self.network(system_size, number_of_actions, device)
+            self.model = self.network(system_size, 3, device)
         self.model = self.model.to(self.device)
         self.learning_rate = learning_rate
         # hyperparameters RL
-        self.number_of_actions = number_of_actions
         self.num_simulations = num_simulations
         self.discount_factor = discount_factor
         self.epsilon = epsilon
@@ -126,21 +125,16 @@ class RL():
             self.toric.generate_random_error(self.p_error)
             generated_errors += 1
             terminal_state = self.toric.terminal_state(self.toric.current_state)
-            # solve one episode
+            # define mcts object
             mcts = MCTS(deepcopy(self.model), self.device, self.num_simulations, self.epsilon, self.discount_factor, self.grid_shift)
-
             old_tree = None
             visited = []
-
+            # solve one episode
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
-
-                t0 = time.time()
-
                 num_of_steps_per_episode += 1
                 iteration += 1
-
+                # tree search
                 tree = mcts.get_tree(old_tree, self.toric, visited)
-                
                 # select best action among visited nodes
                 qvals_visited = list(list(zip(*tree.visited_PQ.values()))[1])
                 action = None
@@ -155,25 +149,21 @@ class RL():
                     else:
                         qvals_visited[qvals_visited.index(max(qvals_visited))] = -1e6
                     self.toric.step(a)
-
                 visited.append((np.array_str(self.toric.current_state), action))
-                
                 # take step
                 self.toric.step(action)
                 self.toric.current_state = self.toric.next_state
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
-
                 # save transitions in memory
                 for (s, a), (perspective, Q) in tree.visited_PQ.items():
                     self.memory.save((a, perspective, Q), 10000)  # max priority
                     samples_in_memory += 1
-
-
+                # reuse tree
                 old_tree = tree.child_nodes[np.array_str(self.toric.current_state)]
 
-                print('training steps:', iteration, ' Time:', time.time() - t0) 
+                print('training steps:', iteration) 
             
-
+            # experience replay
             if samples_in_memory > self.memory_reset:                
                 for _ in range(samples_in_memory):
                     self.experience_replay(optimizer, criterion, batch_size)
@@ -233,10 +223,8 @@ class RL():
                 terminal_state = 0
                 # generate random syndrom
                 self.toric = Toric_code(self.system_size)
-
                 self.toric.generate_random_error(p_error)
-
-                terminal_state = self.toric.terminal_state(self.toric.current_state) # 0 om är terminal
+                terminal_state = self.toric.terminal_state(self.toric.current_state)
                 # plot one episode
                 if plot_one_episode == True and j == 0 and i == 0:
                     self.toric.plot_toric_code(self.toric.current_state, 'initial_syndrom')
@@ -245,9 +233,7 @@ class RL():
                 # solve syndrome
                 while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                     num_of_steps_per_episode += 1
-
                     action = self.select_action_prediction()
-
                     self.toric.step(action)
                     self.toric.current_state = self.toric.next_state
                     terminal_state = self.toric.terminal_state(self.toric.current_state)
@@ -258,7 +244,7 @@ class RL():
                 # compute mean steps 
                 mean_steps_per_p_error = incremental_mean(num_of_steps_per_episode, mean_steps_per_p_error, j+1)
                 # save error corrected 
-                error_corrected[j] = self.toric.terminal_state(self.toric.current_state) # 0: error corrected # 1: error not corrected    
+                error_corrected[j] = self.toric.terminal_state(self.toric.current_state)
                 # update groundstate
                 self.toric.eval_ground_state()                                                          
                 ground_state[j] = self.toric.ground_state # False non trivial loops
@@ -283,12 +269,13 @@ class RL():
         data_all = np.zeros((1, 15))
 
         for i in range(epochs):
+            t0 = time.time()
             self.train(training_steps=training_steps,
                     optimizer=optimizer,
                     batch_size=batch_size,
                     replay_start_size=replay_start_size,
                     epochs=epochs)
-            print('training done, epoch: ', i+1)
+            print('training done, epoch: ', i+1, 'time taken:', time.time() - t0)
             # evaluate network
             error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, 
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error,                                                                                                                                                                        save_prediction=True,
