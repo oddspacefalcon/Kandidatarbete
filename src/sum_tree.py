@@ -66,10 +66,8 @@ class Sum_tree(object):
         return self.size
 
 if __name__ == '__main__':
-    s = Sum_tree(10)
+    s = Sum_tree(20)
     for i in range(20):
         s.add(2**i, i)
     s.print_tree()
     print(s.find(0.5))
-
-    print(s.tree_level)

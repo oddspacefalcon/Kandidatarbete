@@ -6,119 +6,116 @@ import copy
 import torch
 import random
 import sys
+import time
 EPS = 1e-8
 
+
+
 class MCTS():
-    """
-    Represents a MCTS tree
-    """
 
-    def __init__(self, toric_code, model, device, args):
-        self.toric_code = toric_code # toric_model object
-        self.model = model  # resnet
-        self.args = args    # c_puct, num_simulations (antalet noder), grid_shift 
-        self.Qsa = {}       # stores Q values for s,a (as defined in the paper)
-        self.Nsa = {}       # stores #times edge s,a was visited
-        self.Ns = {}        # stores #times board s was visited
-        self.Ps = {}        # stores initial policy (returned by neural net)
+    def __init__(self, model, device, num_simulations, epsilon, discount_factor, grid_shift):
+
+
+        class Node():
+            def __init__(self):
+                self.Q = None # torch.tensor(perspectives x actions) 
+                self.perspectives = None # (batch_perspectives, batch_position_actions)
+                self.child_nodes = {} # (str(state): Node)
+                self.parent = None # Node
+                self.visited_PQ = {} # (str(state), a): (perspective, Q)
+
+
+        self.Node = Node
         self.device = device
-        self.actions = [] # stores root node actions
-        self.current_level = 0
-        self.loop_check = set() # set that stores state action pairs
+        self.visited_temp = [] # (str(state), a, r)
+        self.visites = []
+        self.model = model
+        self.num_simulations = num_simulations
+        self.epsilon = epsilon
+        self.discount_factor = discount_factor
+        self.grid_shift = grid_shift
 
-    def search(self, state):
+    def backpropagate(self, node):
+        if node.parent:
+            for s, a, r in self.visited_temp[::-1]:
+                Qa = r if r == 100 else self.discount_factor*node.Q.max().cpu().numpy() + r
+                node = node.parent
+                col = a.action - 1
+                row = next((row for row, perspective in enumerate(node.perspectives[1]) if perspective == a.position), None)
+
+                node.Q[row][col] = Qa
+                node.visited_PQ[(s, a)] = (node.perspectives[0][row], Qa)
+
+    def search(self, state, node, s, visited):
         # so no computation history is saved
         with torch.no_grad():
-            # np.arrays unhashable, needs string
-            s = np.array_str(state.current_state)
-
-            perspectives = state.generate_perspective(self.args['grid_shift'], state.current_state)
-            number_of_perspectives = len(perspectives)
-            perspectives = Perspective(*zip(*perspectives))
-            batch_perspectives = np.array(perspectives.perspective)
-            batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
-            batch_perspectives = batch_perspectives.to(self.device)
-            batch_position_actions = perspectives.position
-
-            if np.all(state.current_state == 0):
-                # if terminal state
-                return 1 # terminal <=> vunnit
-
-            if s not in self.Ps:
-                # leaf node => expand
-                self.Ps[s], v = self.model(batch_perspectives)
-                self.Ns[s] = 0
-                return v
-
-            cur_best = -float('inf')
-            best_act = -1
-
-            self.current_level += 1
-            # pick the action with the highest upper confidence bound, using all perspectives of toric code s
-            for perspective in range(number_of_perspectives):
-                for action in range(1, 4):
-
-                    a = Action(batch_position_actions[perspective], action)
-
-                    if self.current_level == 1:
-                        self.actions.append(a)
-
-                    if (s,a) in self.Qsa:
-                        u = self.Qsa[(s,a)] + self.args['cpuct']*self.Ps[s][perspective][action-1]*\
-                            math.sqrt(self.Ns[s])/(1+self.Nsa[(s,a)])
-                    else:
-                        u = self.args['cpuct']*self.Ps[s][perspective][action-1]*math.sqrt(self.Ns[s] + EPS)
-                    # loop_check to make sure the same bits are not flipped back and forth, creating an infinite recursion loop
-                    if u > cur_best and (s,a) not in self.loop_check:
-                        cur_best = u
-                        best_act = a
             
-            self.loop_check.add((s,best_act))
-
-            a = best_act
-            state.step(a)
-            state.current_state = state.next_state
-
-            v = self.search(copy.deepcopy(state))
-
-            if (s,a) in self.Qsa:
-                self.Qsa[(s,a)] = (self.Nsa[(s,a)]*self.Qsa[(s,a)] + v)/(self.Nsa[(s,a)]+1)
-                self.Nsa[(s,a)] += 1
+            if node.Q is None:
+                if not np.all(state.current_state == 0):
+                    perspectives = state.generate_perspective(self.grid_shift, state.current_state)
+                    perspectives = Perspective(*zip(*perspectives))
+                    batch_perspectives = np.array(perspectives.perspective)
+                    batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+                    batch_perspectives = batch_perspectives.to(self.device)
+                    batch_position_actions = perspectives.position
+                    node.perspectives = (batch_perspectives, batch_position_actions)
+                    node.Q = self.model(batch_perspectives)
+                self.backpropagate(node)
+                return
             else:
-                self.Qsa[(s,a)] = v
-                self.Nsa[(s,a)] = 1
+                # select new action using epsilon greedy
+                rand = random.random()
+                qvals = np.array(node.Q.cpu())
+                if 1 - self.epsilon > rand:
+                    action = None
+                    while action is None:
+                        row, col = np.where(qvals == np.max(qvals))
+                        perspective_index = row[0]
+                        action_index = col[0] + 1
+                        a = Action(node.perspectives[1][perspective_index], action_index)
+                        state.step(a)
+                        s_n = np.array_str(state.next_state) 
+                        if (s_n, a, self.get_reward(state)) not in self.visited_temp and (s_n, a) not in visited:
+                            action = a
+                        else:
+                            qvals[row[0]][col[0]] = -1e6
+                        state.step(a)
+                else:
+                    perspective_index = random.randint(0, qvals.shape[0] - 1)
+                    action_index = random.randint(1, qvals.shape[1])
+                    action = Action(node.perspectives[1][perspective_index], action_index)
 
-            self.Ns[s] += 1
-            return v
+                state.step(action)
+                self.visited_temp.append((s, action, self.get_reward(state)))
+                state.current_state = state.next_state
+                s1 = np.array_str(state.current_state)
+                
+                if s1 not in node.child_nodes:
+                    new_node = self.Node()
+                    new_node.parent = node
+                    node.child_nodes[s1] = new_node
 
-    def get_probs_action(self, temp=1):
+                self.search(state, node.child_nodes[s1], s1, visited)
+
+    def get_reward(self, state):
+        if np.all(state.next_state == 0):
+            return 100
+        else:
+            return np.sum(state.current_state) - np.sum(state.next_state)
+                
+    def get_tree(self, old_tree, state, visited):
 
         self.model.eval()
 
-        s = np.array_str(self.toric_code.current_state)
+        if old_tree:
+            simulations = self.num_simulations // 10
+            root_node = old_tree
+        else:
+            simulations = self.num_simulations
+            root_node = self.Node()
 
-        for i in range(self.args['num_simulations']):
-             # if not copied the operations on the toric code would be saved over every tree
-            self.search(copy.deepcopy(self.toric_code))
-             # clear loop_check so the same path can be taken in new tree
-            self.loop_check.clear()
-        
-        del self.model, self.Ps
-        torch.cuda.empty_cache()
+        for _ in range(simulations):
+            self.search(copy.deepcopy(state), root_node, np.array_str(state.current_state), visited)
+            self.visited_temp.clear()
 
-        counts = [self.Nsa[(s,a)] if (s,a) in self.Nsa else 0 for a in self.actions]
-
-        if temp==0:
-            bestA = np.argmax(counts)
-            probs = [0]*len(counts)
-            probs[bestA]=1
-            return probs, self.actions[bestA]
-
-        counts = [x**(1./temp) for x in counts]
-        counts_sum = float(sum(counts))
-        probs = [x/counts_sum for x in counts]
-        probs = torch.tensor(probs)
-        # sample an action according to probabilities probs
-        action = torch.multinomial(probs, 1)
-        # return flat prob matrix
-        return probs, self.actions[action]
+        return root_node

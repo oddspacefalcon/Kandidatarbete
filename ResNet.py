@@ -7,7 +7,6 @@ Reference:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 #from torchsummary import summary
 
 
@@ -76,8 +75,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, num_blocks[2], stride=1)
         self.layer4 = self._make_layer(block, 512, num_blocks[3], stride=2)
         self.linear = nn.Linear(512*block.expansion, num_classes)
-        self.linear_v = nn.Linear(512, 1)
-        self.softmax = nn.Softmax(dim=0)
+        #self.linear = nn.Linear(512, num_classes)
 
     def _make_layer(self, block, planes, num_blocks, stride):
         strides = [stride] + [1]*(num_blocks-1)
@@ -95,10 +93,8 @@ class ResNet(nn.Module):
         out = self.layer4(out)
         out = F.avg_pool2d(out, 4)
         out = out.view(out.size(0), -1)
-        out_v = torch.tanh(self.linear_v(out))
         out = self.linear(out)
-        out = self.softmax(out.view(-1)).view(-1, 3)
-        return out, torch.mean(out_v)
+        return out
 
 
 def ResNet18():

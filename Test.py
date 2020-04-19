@@ -7,29 +7,20 @@ import torch.nn as nn
 import numpy as np
 from src.util import convert_from_np_to_tensor
 import time
+import copy
+import random
 
-steps = 5
-start_time = time.time()
-print('gpu synlig:', torch.cuda.is_available())
-print(torch.cuda.memory_reserved(device='cuda') * 1e-6, 'Mb')
-for i in range(steps):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    #device = 'cpu'
-    system_size = 7
-    toric_code = Toric_code(system_size)
-    toric_code.generate_random_error(0.1)
 
-    model = ResNet18().to(device)
-    print(torch.cuda.memory_reserved(device='cuda') * 1e-6, 'Mb')
+t = torch.tensor([1, 1, 2], device='cuda')
 
-    model.eval()
-    args = {'cpuct': 50, 'num_simulations':100, 'grid_shift': system_size//2}
 
-    mcts = MCTS(toric_code, model, device, args)
-    pi, action = mcts.get_probs_action()
 
-    print('pi:', pi)
-    print('action:', action)
-    print('----------------------------------')
+batch_size = 5
 
-print('time per step: {0:.3} s'.format((time.time() - start_time) / steps))
+t2 = torch.zeros((batch_size, *t.shape), device='cuda')
+
+
+for i in range(batch_size):
+    t2[i] = t
+
+print(t2.shape)

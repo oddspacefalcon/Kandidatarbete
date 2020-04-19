@@ -26,7 +26,7 @@ from .MCTS import MCTS
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
                 number_of_actions=3, max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
-                cpuct=0.5, num_mcts_simulations=20):
+                num_simulations=20, discount_factor=0.95, epsilon=0.1, memory_reset=150):
         # device
         self.device = device
         # Toric code
@@ -58,7 +58,10 @@ class RL():
         self.learning_rate = learning_rate
         # hyperparameters RL
         self.number_of_actions = number_of_actions
-        self.tree_args = {'cpuct': cpuct, 'num_simulations':num_mcts_simulations, 'grid_shift': self.grid_shift}
+        self.num_simulations = num_simulations
+        self.discount_factor = discount_factor
+        self.epsilon = epsilon
+        self.memory_reset = memory_reset
 
 
     def save_network(self, PATH):
@@ -70,46 +73,48 @@ class RL():
         self.model = self.model.to(self.device)
 
 
-    def experience_replay(self, optimizer, batch_size):
+    def experience_replay(self, optimizer, criterion, batch_size):
         self.model.train()
-        # get transitions and unpack them (to gpu)
+        # get transitions and unpack them
         transitions, weights, indices = self.memory.sample(batch_size, 0.4) # beta parameter 
-        batch_batch_perspective, pi_batch, z_batch = transitions[0]
-        # compute loss and update replay memory
+        action_batch, perspective_batch, q_target_batch = zip(*transitions)
+        action_batch = torch.tensor([a.action - 1 for a in action_batch], device=self.device)
+        q_target_batch = torch.tensor(q_target_batch, device=self.device)
+        perspective_batch_tensor = torch.zeros((batch_size, *perspective_batch[0].shape), device=self.device)
+
+        for i in range(batch_size):
+            perspective_batch_tensor[i] = perspective_batch[i]
+
         optimizer.zero_grad()
-        p_batch, v_batch = self.model(batch_batch_perspective.to(self.device))
-        loss = self.get_loss(p_batch, v_batch, pi_batch.to(self.device), z_batch.to(self.device), weights, indices)
-        # backpropagate loss
-        loss.backward()
-        optimizer.step()
+        q_batch = self.model(perspective_batch_tensor)
+        q_batch = q_batch.gather(1, action_batch.view(-1, 1)).squeeze(1)    
+        loss = criterion(q_target_batch, q_batch)
 
-
-    def get_loss(self, p_batch, v_batch, pi_batch, z_batch, weights, indices):
-        p_batch = p_batch.flatten()
-        pi_batch = pi_batch.flatten()      
-        loss = (z_batch-v_batch)**2 - torch.sum(pi_batch * torch.log(p_batch))
         # for prioritized experience replay
-        
         if self.replay_memory == 'proportional':
             loss = convert_from_np_to_tensor(np.array(weights)) * loss.cpu()
             priorities = loss
             priorities = np.absolute(priorities.detach().numpy())
             self.memory.priority_update(indices, priorities)
-        return torch.sum(loss)
+
+        loss = loss.mean()
+        # backpropagate loss
+        loss.backward()
+        optimizer.step()
 
 
     def train(self, epochs, training_steps=int, optimizer=str,
-        batch_size=int, replay_start_size=int, cpuct_start=50, cpuct_end=0.1):
+        batch_size=int, replay_start_size=int):
         # define criterion and optimizer
+        criterion = nn.MSELoss(reduction='none')
         if optimizer == 'RMSprop':
             optimizer = optim.RMSprop(self.model.parameters(), lr=self.learning_rate, weight_decay=0.0001)
         elif optimizer == 'Adam':    
             optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate, weight_decay=0.0001)
         # init counters
-        steps_counter = 0
-        update_counter = 1
+        samples_in_memory = 0
         iteration = 0
-        cpuct_decay = (cpuct_start-cpuct_end) / (training_steps*epochs) # denna behöver tänkas igenom/testas
+        generated_errors = 0
 
         # main loop over training steps 
         while iteration < training_steps:
@@ -119,65 +124,90 @@ class RL():
             terminal_state = 0
             # generate syndroms
             self.toric.generate_random_error(self.p_error)
+            generated_errors += 1
             terminal_state = self.toric.terminal_state(self.toric.current_state)
             # solve one episode
+            mcts = MCTS(deepcopy(self.model), self.device, self.num_simulations, self.epsilon, self.discount_factor, self.grid_shift)
 
-            mcts_transitions = []
+            old_tree = None
+            visited = []
 
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
+
+                t0 = time.time()
+
                 num_of_steps_per_episode += 1
-                steps_counter += 1
                 iteration += 1
 
-                perspectives = self.toric.generate_perspective(self.grid_shift, self.toric.current_state)
-                # preprocess batch of perspectives and actions 
-                perspectives = Perspective(*zip(*perspectives))
-                batch_perspectives = np.array(perspectives.perspective)
-                batch_perspectives = convert_from_np_to_tensor(batch_perspectives) 
+                tree = mcts.get_tree(old_tree, self.toric, visited)
+                
+                # select best action among visited nodes
+                qvals_visited = list(list(zip(*tree.visited_PQ.values()))[1])
+                action = None
+                while action is None:
+                    row, col = np.where(tree.Q.cpu().numpy() == max(qvals_visited))           
+                    perspective_index = row[0]
+                    action_index = col[0] + 1
+                    a = Action(tree.perspectives[1][perspective_index], action_index)
+                    self.toric.step(a)
+                    if (np.array_str(self.toric.next_state), a) not in visited:
+                        action = a
+                    else:
+                        qvals_visited[qvals_visited.index(max(qvals_visited))] = -1e6
+                    self.toric.step(a)
 
-                self.tree_args['cpuct'] = max(self.tree_args['cpuct'] - cpuct_decay, cpuct_end)
-
-                mcts = MCTS(deepcopy(self.toric), deepcopy(self.model), self.device, self.tree_args)
-                pi, action = mcts.get_probs_action()
-
-                mcts_transitions.append((batch_perspectives, pi))
-
-                print('training steps:', iteration)
-
-                m1 = torch.cuda.memory_reserved(device='cuda')
-                m2 = torch.cuda.memory_reserved(device='cuda')
-                print(m1 * 1e-6, 'Mb')
-                #print((m2-m1) * 1e-6, 'Mb')
-                print('cuda?:', torch.cuda.is_available())
-                torch.cuda.empty_cache()    
-
-                #print(self.tree_args['cpuct'])
-
-                if iteration == 1:
-                    start_errors = np.sum(self.toric.current_state)
-                end_errors = np.sum(self.toric.current_state)
-
-                self.toric.step(action)                
-
-                # set next_state to new state and update terminal state
+                visited.append((np.array_str(self.toric.current_state), action))
+                
+                # take step
+                self.toric.step(action)
                 self.toric.current_state = self.toric.next_state
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-            
-            
-            # 1 > andelen korrigerade > -1
-            z = torch.tensor(1 if terminal_state == 0 else max((start_errors - end_errors) / start_errors, -1))
-
-            for transition in mcts_transitions:
                 # save transitions in memory
-                self.memory.save(transition + (z,), 10000)  # max priority
+                for (s, a), (perspective, Q) in tree.visited_PQ.items():
+                    self.memory.save((a, perspective, Q), 10000)  # max priority
+                    samples_in_memory += 1
 
-            # experience replay
-            if steps_counter > replay_start_size:
-                update_counter += 1
-                self.experience_replay(optimizer, batch_size)
 
+                old_tree = tree.child_nodes[np.array_str(self.toric.current_state)]
+
+                print('training steps:', iteration, ' Time:', time.time() - t0) 
             
+
+            if samples_in_memory > self.memory_reset:                
+                for _ in range(samples_in_memory):
+                    self.experience_replay(optimizer, criterion, batch_size)
+
+                # reset memory
+                if self.replay_memory == 'proportional':
+                    self.memory = Replay_memory_prioritized(self.replay_memory_capacity, 0.6)
+                elif self.replay_memory == 'uniform':
+                    self.memory = Replay_memory_uniform(self.replay_memory_capacity)
+                
+                samples_in_memory = 0
+
+
+    def select_action_prediction(self):
+        # set network in evluation mode 
+        self.model.eval()
+        # generate perspectives 
+        perspectives = self.toric.generate_perspective(self.grid_shift, self.toric.current_state)
+        number_of_perspectives = len(perspectives)
+        # preprocess batch of perspectives and actions 
+        perspectives = Perspective(*zip(*perspectives))
+        batch_perspectives = np.array(perspectives.perspective)
+        batch_perspectives = convert_from_np_to_tensor(batch_perspectives)
+        batch_perspectives = batch_perspectives.to(self.device)
+        batch_position_actions = perspectives.position
+        # choose action 
+        with torch.no_grad():
+            qvals = self.model(batch_perspectives)
+            qvals = np.array(qvals.cpu())
+            row, col = np.where(qvals == np.max(qvals))
+            perspective = row[0]
+            max_q_action = col[0] + 1
+            best_action = Action(batch_position_actions[perspective], max_q_action)
+        return best_action
 
 
     def prediction(self, num_of_predictions=1, num_of_steps=50, PATH=None, plot_one_episode=False, 
@@ -216,8 +246,8 @@ class RL():
                 while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                     num_of_steps_per_episode += 1
 
-                    mcts = MCTS(deepcopy(self.toric), self.model, self.device, self.tree_args)
-                    pi, action = mcts.get_probs_action()
+                    action = self.select_action_prediction()
+
                     self.toric.step(action)
                     self.toric.current_state = self.toric.next_state
                     terminal_state = self.toric.terminal_state(self.toric.current_state)

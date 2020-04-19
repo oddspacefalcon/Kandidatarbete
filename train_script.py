@@ -32,20 +32,22 @@ SYSTEM_SIZE = 5
 # For continuing the training of an agent
 continue_training = False
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'size_7_NN_11'
+NETWORK_FILE_NAME = 'size_5_NN_11'
 
 # initialize RL class and training parameters 
 rl = RL(Network=NETWORK,
         Network_name=NETWORK_FILE_NAME,
         system_size=SYSTEM_SIZE,
         p_error=0.1,
-        replay_memory_capacity=10000, 
+        replay_memory_capacity=1000, 
         learning_rate=0.00025,
-        max_nbr_actions_per_episode=75,
+        max_nbr_actions_per_episode=50,
         device=device,
         replay_memory='proportional',  # proportional or uniform
-        num_mcts_simulations=10,
-        cpuct=50)
+        num_simulations=100, 
+        discount_factor=0.95, 
+        epsilon=0.1, 
+        memory_reset=150)
 
 
 # generate folder structure 
@@ -65,13 +67,13 @@ if continue_training == True:
 # train for n epochs the agent (test parameters)
 rl.train_for_n_epochs(training_steps=1000,
                     num_of_predictions=100,
-                    num_of_steps_prediction=75,
-                    epochs=10,
+                    num_of_steps_prediction=50,
+                    epochs=20,
                     optimizer='Adam',
                     batch_size=32,
                     directory_path = PATH,
                     prediction_list_p_error=[0.1],
-                    replay_start_size=32)
+                    replay_start_size=50)
 
 
 """rl.train_for_n_epochs(training_steps=10000,
