@@ -257,11 +257,13 @@ class MCTS_Rollout2():
         reward = []
 
         # Dont have to go through all actions only 20*3 of them
+        
         while True:
-            if len(actions) > 20:
+            if len(actions) > 15:
                 del actions[random.randint(0, len(actions)-1)]
             else:
                 break
+        
 
         for i in range(len(actions)):
             for j in actions[i]:   
@@ -427,7 +429,7 @@ class MCTS_Rollout2():
         if len(action_arr) >= 10:
             equal = self.check_array_loop(action_arr, 10)
             if equal == 10:
-                print('5 loop fix')
+                #print('5 loop fix')
                 best_action, all_Qsa = self.new_best_action(all_Qsa, actions, maxQ, index_max)
                 return best_action, all_Qsa
     

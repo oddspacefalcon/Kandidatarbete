@@ -72,7 +72,7 @@ class RL():
         # d = 5, disscount_backprop = 0.9, num_sim = 70,  
         # d = 7, disscount_backprop = 0.9, num_sim = 90,            
         # d = 9, disscount_backprop = 0.9, num_sim = 110, 
-        num_sim = 110  #Beror på system size
+        num_sim = 70  #Beror på system size
 
         disscount_backprop = 0.9 # OK
         cpuct = np.sqrt(2) #OK
@@ -146,14 +146,13 @@ class RL():
         epsilon_cpuct_update = num_of_steps * reach_final_epsilon_cpuct
 
         # main loop over training steps
-        while iteration < training_steps:
-            
+        while iteration < training_steps:    
             num_of_steps_per_episode = 0
             # initialize syndrom
             self.toric = Toric_code(self.system_size)
            
             # Generate random syndroms over interval P_error = [0.05, 0.15]
-            #self.p_error = round(random.uniform(0.05,0.1), 2)
+            #self.p_error = round(random.uniform(0.03,0.14), 2)
             
             # generate syndroms
             self.toric.generate_random_error(self.p_error)
@@ -176,7 +175,6 @@ class RL():
                 num_of_epsilon_cpuct_steps += 1
                 steps_counter += 1
                 iteration += 1
-
                 #mcts.args['num_simulations']  = simulations[simulation_index]
                 # select action using epsilon greedy policy
                 #start = time.time()
@@ -208,10 +206,10 @@ class RL():
                     self.tree_args['cpuct'] = np.round(np.maximum(self.tree_args['cpuct'] - cpuct_decay, cpuct_end), 3)         
 
                 # set next_state to new state 
-                #self.toric.step(best_action)
-                #terminal_state = self.toric.terminal_state(self.toric.next_state)
-                #self.toric.current_state = self.toric.next_state
-                terminal_state = 0
+                self.toric.step(best_action)
+                terminal_state = self.toric.terminal_state(self.toric.next_state)
+                self.toric.current_state = self.toric.next_state
+                #terminal_state = 0
                 #print('set next_state to new state:',end-start,' s')
                 
             
@@ -283,6 +281,7 @@ class RL():
                 #self.toric.generate_random_error(p_error)
                 
                 #self.toric.generate_random_error(p_error)
+                minimum_nbr_of_qubit_errors=0
                 ############################################
                 
                 if minimum_nbr_of_qubit_errors == 0:
@@ -342,7 +341,7 @@ class RL():
         batch_size=32, replay_start_size=32):
         
         data_all = np.zeros((1, 15))
-        data_result = np.zeros((1, 2))
+        data_result = np.zeros((1, 3))
 
         for i in range(epochs):
             self.train(training_steps=training_steps,
@@ -364,9 +363,9 @@ class RL():
             np.savetxt(directory_path + '/data_all.txt', data_all, 
                 header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, p_error_train, number_of_predictions, ground_state_list, average_number_of_steps_list, number_of_failed_syndroms, error_corrected_list', delimiter=',', fmt="%s")
             
-            data_result = np.append(data_result, np.array([[training_steps * (i+1), error_corrected_list[0]]]), axis=0)
+            data_result = np.append(data_result, np.array([[training_steps * (i+1), error_corrected_list[0], len(failed_syndroms)/2]]), axis=0)
             np.savetxt(directory_path + '/data_result.txt', data_result, 
-                header='tot_training_steps, error_corrected', delimiter=',  ', fmt="%s")
+                header='tot_training_steps, error_corrected, failed_syndroms', delimiter=',  ', fmt="%s")
 
             # save network
             step = (i + 1) * training_steps

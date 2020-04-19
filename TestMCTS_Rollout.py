@@ -64,39 +64,40 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 toric.plot_toric_code(toric.current_state, 'initial_syndrom')
             
             init_qubit_state = copy.deepcopy(toric.qubit_matrix)
-            
+            mcts = MCTS_Rollout2('cpu', args, copy.deepcopy(toric), None) #Classic rollout MCTS
             # solve syndrome
             while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                 steps_counter += 1
                 num_of_steps_per_episode += 1
 
                 # choose MCTS action
-                mcts = MCTS_Rollout2('cpu', args, copy.deepcopy(toric), None) #Classic rollout MCTS 
+                 
                 _,_,_,action  = mcts.get_qs_actions()
 
                 # choose MCTS action
                 #mcts = MCTS_Rollout('cpu', args, copy.deepcopy(toric), None, last_best_action) #Classic rollout MCTS 
                 #_,_,_,action , last_best_action = mcts.get_qs_actions()
 
-                
+                '''
                 print('___________________________________________________')
                 print(toric.current_state)
                 print('-----------')
                 print('best action', action)
                 add1 = np.sum(toric.current_state)
-                
-
+                '''
+     
                 prev_action = action
                 toric.step(action)
                 toric.current_state = toric.next_state
                 terminal_state = toric.terminal_state(toric.current_state)
+                mcts.next_step(action)
                 
-                
+                '''
                 print(toric.current_state)
                 add2 = np.sum(toric.current_state)
                 print('sum diff: ', add1-add2)
                 print('Tot err left: ', add2)
-                
+                '''
 
                 if plot_one_episode == True and j == 0 and i == 0:
                     toric.plot_toric_code(toric.current_state, 'step_'+str(num_of_steps_per_episode))
@@ -131,13 +132,63 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
 # d = 5, P_error = 0.1, disscount_backprop = 0.9, num_sim = 70              Success rate = 0.96, average number of steps = 5.6           
 # d = 7, P_error = 0.1, disscount_backprop = 0.9, num_sim = 90
 # d = 9, P_error = 0.1, disscount_backprop = 0.9, num_sim = 110
+# d = 11, P_error = 0.1, disscount_backprop = 0.9, num_sim = 120
 
-system_size = 11
-num_sim = 100  #50
-num_of_predictions = 100
+
+system_size = 5
+num_sim = 70  #50
+num_of_predictions = 3
+plot_range = 2 # plot from P_error = 0.01 to plot_range*0.01
 
 #########################################################################################################################################
-P_error = 0.05
+data_result = np.zeros((1, 2))
+timestamp = time.strftime("%y_%m_%d__%H__%M__%S__")
+PATH = 'Results/MCTS_prediction__'+ timestamp
+if not os.path.exists(PATH):
+    os.makedirs(PATH)
+
+for i in range(plot_range):
+    i += 1
+    print('i', i)
+
+    P_error = i * 0.01
+    disscount_backprop = 0.9
+    cpuct = np.sqrt(2) #OK
+    reward_multiplier = 100
+    device = 'cuda' #OK
+    grid_shift = system_size//2 #OK
+    prediction_list_p_error = [P_error] #OK
+    minimum_nbr_of_qubit_errors = 0 #int(system_size/2)+1
+    args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': system_size//2, 'discount_factor':disscount_backprop, \
+        'reward_multiplier':reward_multiplier}
+    
+    error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error, nr_failed_syndroms = predictionMCTS(
+        args = args,
+        num_of_predictions=num_of_predictions, 
+        num_of_steps=20, 
+        prediction_list_p_error=prediction_list_p_error,
+        minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
+        plot_one_episode=False,
+        system_size = system_size)
+    
+    win_rate = (num_of_predictions-(len(failed_syndroms)/2))/num_of_predictions
+    # save training settings in txt file 
+    data_result = np.append(data_result ,np.array([[prediction_list_p_error[0], win_rate]]), axis= 0)
+    np.savetxt(PATH + '/MCTS_data_result.txt', data_result, delimiter=',', fmt="%s")
+    
+
+
+
+
+
+
+
+
+
+
+
+
+P_error = 0.2
 disscount_backprop = 0.9
 cpuct = np.sqrt(2) #OK
 reward_multiplier = 100
@@ -154,12 +205,27 @@ error_corrected_list, ground_state_list, average_number_of_steps_list, failed_sy
     num_of_steps=50, 
     prediction_list_p_error=prediction_list_p_error,
     minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
-    plot_one_episode=True,
+    plot_one_episode=False,
     system_size = system_size)
 
-print(error_corrected_list, 'error corrected')
-print(ground_state_list, 'ground state conserved')
-print(average_number_of_steps_list, 'average number of steps')
+#print(error_corrected_list, 'error corrected')
+#print(ground_state_list, 'ground state conserved')
+#print(average_number_of_steps_list, 'average number of steps')
 #print('Nr of failed syndroms', nr_failed_syndroms, ' --> Win rate =',(num_of_predictions-nr_failed_syndroms)/num_of_predictions)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 

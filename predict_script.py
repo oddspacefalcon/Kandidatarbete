@@ -24,9 +24,11 @@ network = NN_11
 #NETWORK_FILE_NAME = 'Size_5_NN_11' #Win rate 0.6999, P=0.15
 #NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000' #Win rate: 0.961, P=0.05
 #NETWORK_FILE_NAME = 'Size_5_NN_11_steps_7150' #Win rate: 0.964, P=0.05
-                                                                      
 
-num_of_predictions = 1000
+# d = 11
+
+NETWORK_FILE_NAME ='Main_Size_5_NN_11_steps_7000'     # Main P_e=0.05 ->0.9535 __ P_e=0.03 ->0.9895 __ P_e=0.1 ->0.775__ P_e=0.15 ->0.5
+num_of_predictions = 1
 
 # initialize RL class
 rl = RL(Network=network,
@@ -36,7 +38,7 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.05]
+prediction_list_p_error = [0.1]
 # generate syndrome with a fixed amount of errors 
 minimum_nbr_of_qubit_errors = 0 #int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
