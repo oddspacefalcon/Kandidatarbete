@@ -107,7 +107,7 @@ class MCTS():
         self.model.eval()
 
         if old_tree:
-            simulations = self.num_simulations // 10
+            simulations = max(self.num_simulations // 10, 3)
             root_node = old_tree
         else:
             simulations = self.num_simulations
