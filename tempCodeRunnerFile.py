@@ -1,1 +1,1 @@
-steelblue
+plot(system_size5,system_size11, system_size13,PATH5, PATH11, PATH13, plot_range)

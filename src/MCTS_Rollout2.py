@@ -82,12 +82,12 @@ class MCTS_Rollout2():
         try:
             index_max = np.where(all_Qsa==maxQ)
             index_max = (index_max[0][0], index_max[1][0])
-            best_action = actions[index_max[0]][index_max[1]]
+            best_action1 = actions[index_max[0]][index_max[1]]
         except ValueError:
             rand_index1 = random.randint(0,len(actions))
             rand_index2 = random.randint(0,2)         
-            best_action = actions[rand_index1][rand_index2]
-        '''
+            best_action1 = actions[rand_index1][rand_index2]
+        
         ##### Array of up to 10 of previous actions chosen by MCTS 
         self.last_best_action_array.append(best_action1)
         if len(self.last_best_action_array) == 11:
@@ -100,7 +100,7 @@ class MCTS_Rollout2():
         if equal != 2:
             self.last_best_action_array[len(self.last_best_action_array)-1] = best_action
         #####
-        '''
+        
 
         perspectives = self.generate_perspective(self.args['grid_shift'], self.syndrom)
         perspectives = Perspective(*zip(*perspectives)).perspective

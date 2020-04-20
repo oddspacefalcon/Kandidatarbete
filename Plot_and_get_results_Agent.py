@@ -9,7 +9,7 @@ from src.toric_model import Toric_code
 from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 
-def predict(plot_range, predict_nr, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode):
+def predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode):
     # Generate folder structure, all results are stored in the data_results folder 
     timestamp = time.strftime("%y_%m_%d__%H__%M__%S__")
     PATH = 'Results/prediction__' +str(NETWORK_FILE_NAME) +'__'+ timestamp
@@ -91,16 +91,15 @@ def plot(PATH, plot_range, system_size):
 
 #######################################
 device = 'cuda'
-system_size = 5
-predict_nr = 1
+system_size = 11
 network = ResNet18 # Valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 NETWORK_FILE_NAME = 'Main_Size_11_ResNet18_steps_1000_learning_rate_0.0005' # this file is stored in the network folder and contains the trained agent.                                                             
-num_of_predictions = 1000
-plot_range = 20 # plot from P_error = 0.01 to plot_range*0.01
+num_of_predictions = 10
+plot_range = 2 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
 ########################################
-#PATH = predict(plot_range, predict_nr, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
-PATH  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
+PATH = predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
+#PATH  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
 plot(PATH, plot_range, system_size)
 
 

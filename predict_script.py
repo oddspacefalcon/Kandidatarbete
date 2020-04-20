@@ -15,20 +15,20 @@ device = 'cuda'
 ##########################################################################
 
 # common system sizes are 3,5,7 and 9. Grid size must be odd! 
-system_size = 5
+system_size = 9
 
 # valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
-network = NN_11
+network = ResNet18
 
 # this file is stored in the network folder and contains the trained agent.  
 #NETWORK_FILE_NAME = 'Size_5_NN_11' #Win rate 0.6999, P=0.15
-#NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000' #Win rate: 0.961, P=0.05
+NETWORK_FILE_NAME = 'size_9_Size_9_ResNet18_epoch_9_memory_uniform_optimizer_Adam__steps_900_learning_rate_0.00025' #Win rate: 0.961, P=0.05
 #NETWORK_FILE_NAME = 'Size_5_NN_11_steps_7150' #Win rate: 0.964, P=0.05
 
 # d = 11
 
-NETWORK_FILE_NAME ='Main_Size_5_NN_11_steps_7000'     # Main P_e=0.05 ->0.9535 __ P_e=0.03 ->0.9895 __ P_e=0.1 ->0.775__ P_e=0.15 ->0.5
-num_of_predictions = 1
+#NETWORK_FILE_NAME ='Size_5_NN_11'     # Main P_e=0.05 ->0.9535 __ P_e=0.03 ->0.9895 __ P_e=0.1 ->0.775__ P_e=0.15 ->0.5
+num_of_predictions = 100
 
 # initialize RL class
 rl = RL(Network=network,
@@ -38,7 +38,7 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.1]
+prediction_list_p_error = [0.01]
 # generate syndrome with a fixed amount of errors 
 minimum_nbr_of_qubit_errors = 0 #int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
@@ -57,7 +57,7 @@ error_corrected_list, ground_state_list, average_number_of_steps_list, failed_sy
     PATH=PATH2, 
     prediction_list_p_error=prediction_list_p_error,
     minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
-    plot_one_episode=True) # FÖR att plotta
+    plot_one_episode=False) # FÖR att plotta
 
 # runtime of prediction
 runtime = time.time()-start
@@ -65,6 +65,7 @@ runtime = runtime / 3600
 
 win_rate = (num_of_predictions-(len(failed_syndroms)/2))/num_of_predictions
 print(ground_state_list, 'ground state conserved rate.')
+print(error_corrected_list, 'error corrected list')
 print(average_number_of_steps_list, 'average number of steps.')
 print(len(failed_syndroms)/2, 'failed syndroms out of',num_of_predictions, 'predictions --> Win rate:',win_rate)
 

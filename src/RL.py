@@ -172,7 +172,7 @@ class RL():
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
                 #print('-------------------------------------')
                 num_of_steps_per_episode += 1
-                num_of_epsilon_cpuct_steps += 1
+                N += 1
                 steps_counter += 1
                 iteration += 1
                 #mcts.args['num_simulations']  = simulations[simulation_index]
