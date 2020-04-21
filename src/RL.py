@@ -26,7 +26,7 @@ from .MCTS import MCTS
 class RL():
     def __init__(self, Network, Network_name, system_size=int, p_error=0.1, replay_memory_capacity=int, learning_rate=0.00025,
                 max_nbr_actions_per_episode=50, device='cpu', replay_memory='uniform',
-                num_simulations=20, discount_factor=0.95, epsilon=0.1, memory_reset=150):
+                num_simulations=10, discount_factor=0.95, epsilon=0.1, target_update=400):
         # device
         self.device = device
         # Toric code
@@ -60,7 +60,7 @@ class RL():
         self.num_simulations = num_simulations
         self.discount_factor = discount_factor
         self.epsilon = epsilon
-        self.memory_reset = memory_reset
+        self.target_update = target_update
 
 
     def save_network(self, PATH):
@@ -103,7 +103,7 @@ class RL():
 
 
     def train(self, epochs, training_steps=int, optimizer=str,
-        batch_size=int, replay_start_size=int):
+        batch_size=int):
         # define criterion and optimizer
         criterion = nn.MSELoss(reduction='none')
         if optimizer == 'RMSprop':
@@ -118,53 +118,63 @@ class RL():
         # main loop over training steps 
         while iteration < training_steps:
             num_of_steps_per_episode = 0
+
             # initialize syndrom
             self.toric = Toric_code(self.system_size)
             terminal_state = 0
+
             # generate syndroms
             self.toric.generate_random_error(self.p_error)
             generated_errors += 1
             terminal_state = self.toric.terminal_state(self.toric.current_state)
+
             # define mcts object
             mcts = MCTS(deepcopy(self.model), self.device, self.num_simulations, self.epsilon, self.discount_factor, self.grid_shift)
+
             old_tree = None
-            visited = []
+            loop_check = set()
             # solve one episode
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
                 num_of_steps_per_episode += 1
                 iteration += 1
+
                 # tree search
-                tree = mcts.get_tree(old_tree, self.toric, visited)
+                tree = mcts.get_tree(old_tree, self.toric, loop_check)
+
                 # select best action among visited nodes
                 qvals_visited = list(list(zip(*tree.visited_PQ.values()))[1])
                 action = None
                 while action is None:
-                    row, col = np.where(tree.Q.cpu().numpy() == max(qvals_visited))           
+                    row, col = np.where(tree.Q.cpu().numpy() == max(qvals_visited))
                     perspective_index = row[0]
                     action_index = col[0] + 1
                     a = Action(tree.perspectives[1][perspective_index], action_index)
                     self.toric.step(a)
-                    if (np.array_str(self.toric.next_state), a) not in visited:
+                    if np.array_str(self.toric.next_state) not in loop_check:
                         action = a
                     else:
                         qvals_visited[qvals_visited.index(max(qvals_visited))] = -1e6
                     self.toric.step(a)
-                visited.append((np.array_str(self.toric.current_state), action))
+
+                loop_check.add(np.array_str(self.toric.current_state))
+
                 # take step
                 self.toric.step(action)
                 self.toric.current_state = self.toric.next_state
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
+
                 # save transitions in memory
                 for (s, a), (perspective, Q) in tree.visited_PQ.items():
                     self.memory.save((a, perspective, Q), 10000)  # max priority
                     samples_in_memory += 1
+
                 # reuse tree
                 old_tree = tree.child_nodes[np.array_str(self.toric.current_state)]
 
                 print('training steps:', iteration) 
             
             # experience replay
-            if samples_in_memory > self.memory_reset:                
+            if samples_in_memory > self.target_update:                
                 for _ in range(samples_in_memory):
                     self.experience_replay(optimizer, criterion, batch_size)
 
@@ -209,14 +219,12 @@ class RL():
         ground_state_list = np.zeros(len(prediction_list_p_error))
         error_corrected_list = np.zeros(len(prediction_list_p_error))
         average_number_of_steps_list = np.zeros(len(prediction_list_p_error))
-        mean_q_list = np.zeros(len(prediction_list_p_error))
         failed_syndroms = []
         # loop through different p_error
         for i, p_error in enumerate(prediction_list_p_error):
             ground_state = np.ones(num_of_predictions, dtype=bool)
             error_corrected = np.zeros(num_of_predictions)
             mean_steps_per_p_error = 0
-            mean_q_per_p_error = 0
             for j in range(num_of_predictions):
                 num_of_steps_per_episode = 0
                 prev_action = 0
@@ -264,32 +272,43 @@ class RL():
 
     def train_for_n_epochs(self, training_steps=int, epochs=int, num_of_predictions=100, num_of_steps_prediction=50, 
         optimizer=str, save=True, directory_path='network', prediction_list_p_error=[0.1],
-        batch_size=32, replay_start_size=32):
+        batch_size=32):
+
+        best_win_rate = 0
         
-        data_all = np.zeros((1, 15))
+        data_all = np.zeros((1, 16))
 
         for i in range(epochs):
             t0 = time.time()
             self.train(training_steps=training_steps,
                     optimizer=optimizer,
                     batch_size=batch_size,
-                    replay_start_size=replay_start_size,
                     epochs=epochs)
             print('training done, epoch: ', i+1, 'time taken:', time.time() - t0)
+
+            t0 = time.time()
             # evaluate network
             error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, 
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error,                                                                                                                                                                        save_prediction=True,
                                                                                                                                                                         num_of_steps=num_of_steps_prediction)
+            
+            win_rate = (num_of_predictions - len(failed_syndroms)/2) / num_of_predictions
+
+            print('prediction done, epoch: ', i+1, 'time taken:', time.time() - t0, 'win rate:', win_rate)
 
             data_all = np.append(data_all, np.array([[self.system_size, self.network_name, i+1, self.replay_memory, self.device, self.learning_rate, optimizer,
-            training_steps * (i+1), prediction_list_p_error[0], num_of_predictions, len(failed_syndroms)/2, error_corrected_list[0], ground_state_list[0], average_number_of_steps_list[0], self.p_error]]), axis=0)
+            training_steps * (i+1), prediction_list_p_error[0], num_of_predictions, len(failed_syndroms)/2, error_corrected_list[0], ground_state_list[0], average_number_of_steps_list[0], self.p_error, win_rate]]), axis=0)
+
             # save training settings in txt file 
             np.savetxt(directory_path + '/data_all.txt', data_all, 
-                header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, number_of_predictions, number_of_failed_syndroms, error_corrected_list, ground_state_list, average_number_of_steps_list, p_error_train', delimiter=',', fmt="%s")
+                header='system_size, network_name, epoch, replay_memory, device, learning_rate, optimizer, total_training_steps, prediction_list_p_error, number_of_predictions, number_of_failed_syndroms, error_corrected_list, ground_state_list, average_number_of_steps_list, p_error_train, win_rate', delimiter=',', fmt="%s")
             # save network
             step = (i + 1) * training_steps
-            PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}_memory_{5}_optimizer_{4}__steps_{3}_learning_rate_{6}.pt'.format(
-                i+1, self.network_name, self.system_size, step, optimizer, self.replay_memory, self.learning_rate)
-            self.save_network(PATH)
+            PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}.pt'.format(
+                i+1, self.network_name, self.system_size)
+
+            if win_rate > best_win_rate:
+                best_win_rate = win_rate
+                self.save_network(PATH)
             
         return error_corrected_list

@@ -27,7 +27,8 @@ class MCTS():
 
         self.Node = Node
         self.device = device
-        self.visited_temp = [] # (str(state), a, r)
+        self.visited_transition = [] # (str(state), a, r)
+        self.loop_check_temp = set()
         self.model = model
         self.num_simulations = num_simulations
         self.epsilon = epsilon
@@ -36,16 +37,15 @@ class MCTS():
 
     def backpropagate(self, node):
         if node.parent:
-            for s, a, r in self.visited_temp[::-1]:
-                Qa = r if r == 100 else self.discount_factor*node.Q.max().cpu().numpy() + r
+            for s, a, r in self.visited_transition[::-1]:
+                Qa = r if r == 100 or r == -100 else self.discount_factor*node.Q.max().cpu().numpy() + r
                 node = node.parent
                 col = a.action - 1
                 row = next((row for row, perspective in enumerate(node.perspectives[1]) if perspective == a.position), None)
                 node.Q[row][col] = Qa
                 node.visited_PQ[(s, a)] = (node.perspectives[0][row], Qa)
 
-    def search(self, state, node, s, visited):
-        # so no computation history is saved
+    def search(self, state, node, s, loop_check):
         with torch.no_grad():
             if node.Q is None:
                 if not np.all(state.current_state == 0):
@@ -64,27 +64,28 @@ class MCTS():
                 # select new action using epsilon greedy
                 rand = random.random()
                 qvals = np.array(node.Q.cpu())
-                if 1 - self.epsilon > rand:
-                    action = None
-                    while action is None:
+                action = None
+                while action is None:
+                    if 1 - self.epsilon > rand:
                         row, col = np.where(qvals == np.max(qvals))
                         perspective_index = row[0]
                         action_index = col[0] + 1
-                        a = Action(node.perspectives[1][perspective_index], action_index)
-                        state.step(a)
-                        s_n = np.array_str(state.next_state) 
-                        if (s_n, a, self.get_reward(state)) not in self.visited_temp and (s_n, a) not in visited:
-                            action = a
-                        else:
-                            qvals[row[0]][col[0]] = -1e6
-                        state.step(a)
-                else:
-                    perspective_index = random.randint(0, qvals.shape[0] - 1)
-                    action_index = random.randint(1, qvals.shape[1])
-                    action = Action(node.perspectives[1][perspective_index], action_index)
+                    else: 
+                        perspective_index = random.randint(0, qvals.shape[0] - 1)
+                        action_index = random.randint(1, qvals.shape[1])
+                    a = Action(node.perspectives[1][perspective_index], action_index)
+                    state.step(a)
+                    s_n = np.array_str(state.next_state) 
+                    if s_n not in self.loop_check_temp and s_n not in loop_check:
+                        action = a
+                    else:
+                        qvals[perspective_index][action_index - 1] = -1e6
+                    state.step(a)
+                
                 # take step
                 state.step(action)
-                self.visited_temp.append((s, action, self.get_reward(state)))
+                self.visited_transition.append((s, action, self.get_reward(state)))
+                self.loop_check_temp.add(s)
                 state.current_state = state.next_state
                 s1 = np.array_str(state.current_state)
                 
@@ -94,15 +95,16 @@ class MCTS():
                     new_node.parent = node
                     node.child_nodes[s1] = new_node
 
-                self.search(state, node.child_nodes[s1], s1, visited)
+                self.search(state, node.child_nodes[s1], s1, loop_check)
 
     def get_reward(self, state):
         if np.all(state.next_state == 0):
             return 100
         else:
             return np.sum(state.current_state) - np.sum(state.next_state)
+        
                 
-    def get_tree(self, old_tree, state, visited):
+    def get_tree(self, old_tree, state, loop_check):
 
         self.model.eval()
 
@@ -114,7 +116,8 @@ class MCTS():
             root_node = self.Node()
 
         for _ in range(simulations):
-            self.search(copy.deepcopy(state), root_node, np.array_str(state.current_state), visited)
-            self.visited_temp.clear()
+            self.search(copy.deepcopy(state), root_node, np.array_str(state.current_state), loop_check)
+            self.visited_transition.clear()
+            self.loop_check_temp.clear()
 
         return root_node
