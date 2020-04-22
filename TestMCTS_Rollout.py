@@ -79,13 +79,13 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 #mcts = MCTS_Rollout('cpu', args, copy.deepcopy(toric), None, last_best_action) #Classic rollout MCTS 
                 #_,_,_,action , last_best_action = mcts.get_qs_actions()
 
-                
+                '''
                 print('___________________________________________________')
                 print(toric.current_state)
                 print('-----------')
                 print('best action', action)
                 add1 = np.sum(toric.current_state)
-                
+                '''
      
                 prev_action = action
                 toric.step(action)
@@ -93,12 +93,12 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 terminal_state = toric.terminal_state(toric.current_state)
                 mcts.next_step(action)
                 
-                
+                '''
                 print(toric.current_state)
                 add2 = np.sum(toric.current_state)
                 print('sum diff: ', add1-add2)
                 print('Tot err left: ', add2)
-                
+                '''
 
                 if plot_one_episode == True and j == 0 and i == 0:
                     toric.plot_toric_code(toric.current_state, 'step_'+str(num_of_steps_per_episode))
@@ -181,10 +181,10 @@ def plot(system_size5, PATH5, plot_range):
 
 
 system_size = 5
-num_sim = 100  #50
-num_of_predictions = 1
+num_sim = 70  #50
+num_of_predictions = 1000
 plot_range = 20 # plot from P_error = 0.01 to plot_range*0.01
-P_error = 0.2
+P_error = 0.08
 PATH = 'Results/MCTS_prediction__20_04_19__22__51__26__'
 #########################################################################################################################################
 data_result = np.zeros((1, 2))
@@ -196,8 +196,8 @@ if not os.path.exists(PATH):
 '''
 
 
-disscount_backprop = 0.8
-cpuct = 0.9#np.sqrt(2) #OK
+disscount_backprop = 0.9
+cpuct = np.sqrt(2) #OK
 reward_multiplier = 100
 device = 'cuda' #OK
 grid_shift = system_size//2 #OK

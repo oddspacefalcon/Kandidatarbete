@@ -65,9 +65,10 @@ class RL():
         self.number_of_actions = number_of_actions
         self.discount_factor = discount_factor
         self.Nr_epoch = 0
+
+        self.solve_time = []
+        self.avarage_nr_steps = []
         # hyperparameters MCTS
-        
-        
         ########################################## Set Parameters ##########################################            
         # d = 5, disscount_backprop = 0.9, num_sim = 70,  
         # d = 7, disscount_backprop = 0.9, num_sim = 90,            
@@ -172,7 +173,7 @@ class RL():
             while terminal_state == 1 and num_of_steps_per_episode < self.max_nbr_actions_per_episode and iteration < training_steps:
                 #print('-------------------------------------')
                 num_of_steps_per_episode += 1
-                N += 1
+                num_of_epsilon_cpuct_steps += 1
                 steps_counter += 1
                 iteration += 1
                 #mcts.args['num_simulations']  = simulations[simulation_index]
@@ -299,6 +300,7 @@ class RL():
                 init_qubit_state = deepcopy(self.toric.qubit_matrix)
                 
                 # solve syndrome
+                start_solve = time.time()
                 while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                     steps_counter += 1
                     num_of_steps_per_episode += 1
@@ -315,6 +317,8 @@ class RL():
                     terminal_state = self.toric.terminal_state(self.toric.current_state)
                     if plot_one_episode == True and j == 0 and i == 0:
                         self.toric.plot_toric_code(self.toric.current_state, 'step_'+str(num_of_steps_per_episode))
+                end_solve = time.time()
+                solve_time = end_solve-start_solve
 
                 # compute mean steps 
                 mean_steps_per_p_error = incremental_mean(num_of_steps_per_episode, mean_steps_per_p_error, j+1)
@@ -327,6 +331,11 @@ class RL():
                 if terminal_state == 1 or self.toric.ground_state == False:
                     failed_syndroms.append(init_qubit_state)
                     failed_syndroms.append(self.toric.qubit_matrix)
+                elif terminal_state == 0 and self.toric.ground_state == True:
+                    if num_of_steps_per_episode != 0 and j > 20:
+                        #print('time per move: ', solve_time/num_of_steps_per_episode)
+                        self.solve_time.append(solve_time)
+                        self.avarage_nr_steps.append(num_of_steps_per_episode)
 
             success_rate = (num_of_predictions - np.sum(error_corrected)) / num_of_predictions
             error_corrected_list[i] = success_rate
@@ -334,7 +343,7 @@ class RL():
             ground_state_list[i] =  1 - ground_state_change
             average_number_of_steps_list[i] = np.round(mean_steps_per_p_error, 1)
 
-        return error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error
+        return error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error, self.solve_time, self.avarage_nr_steps
 
     def train_for_n_epochs(self, training_steps=int, epochs=int, num_of_predictions=100, num_of_steps_prediction=50, 
         optimizer=str, save=True, directory_path='network', prediction_list_p_error=[0.1],
@@ -353,7 +362,7 @@ class RL():
             print('training done, epoch: ', i+1)
             # evaluate network
             
-            error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = self.prediction(num_of_predictions=num_of_predictions, epsilon=0.0, cpuct=0.0,
+            error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error, solve_time, avarage_nr_steps = self.prediction(num_of_predictions=num_of_predictions, epsilon=0.0, cpuct=0.0,
                                                                                                                                                                         prediction_list_p_error=prediction_list_p_error,                                                                                                                                                                        save_prediction=True,
                                                                                                                                                                         num_of_steps=num_of_steps_prediction)
 

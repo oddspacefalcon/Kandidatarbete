@@ -69,8 +69,8 @@ if continue_training == True:
 num_epochs = 300
 
 # train for n epochs the agent (test parameters)
-rl.train_for_n_epochs(training_steps=250,
-                    num_of_predictions=100,
+rl.train_for_n_epochs(training_steps=5,
+                    num_of_predictions=5,
                     num_of_steps_prediction=45,
                     epochs=num_epochs,
                     optimizer='Adam',
