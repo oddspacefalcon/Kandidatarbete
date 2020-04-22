@@ -23,11 +23,7 @@ device = 'cuda' #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #   ResNet50
 #   ResNet101
 #   ResNet152
-<<<<<<< HEAD
 NETWORK = NN_11
-=======
-NETWORK = NN_17
->>>>>>> ebae4798751da532ef294496a220bd6aeb908d8c
 
 # common system sizes are 3,5,7 and 9 
 # grid size must be odd! 
@@ -37,11 +33,7 @@ SYSTEM_SIZE = 5
 continue_training = False
 
 # this file is stored in the network folder and contains the trained agent.  
-<<<<<<< HEAD
 NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000'
-=======
-NETWORK_FILE_NAME = 'Size_11_NN_17'
->>>>>>> ebae4798751da532ef294496a220bd6aeb908d8c
 start = start = time.time() 
 # initialize RL class and training parameters
 

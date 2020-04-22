@@ -22,8 +22,7 @@ from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 from .util import incremental_mean, convert_from_np_to_tensor, Transition, Action, Qval_Perspective
 from .MCTS import MCTS
-from .MCTS_Rollout import MCTS_Rollout
-from src.MCTS_Rollout2 import MCTS_Rollout2
+from src.MCTS_Rollout import MCTS_Rollout
 
 
 class RL():
@@ -163,7 +162,7 @@ class RL():
             #last_best_action = None
             #print('_____________________________________')
             #mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None, last_best_action)
-            mcts = MCTS_Rollout2('cpu', self.tree_args, copy.deepcopy(self.toric), None)
+            mcts = MCTS_Rollout('cpu', self.tree_args, copy.deepcopy(self.toric), None)
             #end = time.time()
             #print('Initiate MCTS:',end-start,' s')
             self.model.eval()
@@ -273,7 +272,7 @@ class RL():
             mean_q_per_p_error = 0
             steps_counter = 0
             for j in range(num_of_predictions):
-                print('prediction nr', j)
+                #print('prediction nr', j)
                 num_of_steps_per_episode = 0
                 prev_action = 0
                 terminal_state = 0

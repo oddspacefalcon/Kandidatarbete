@@ -7,9 +7,7 @@ import _pickle as cPickle
 from src.RL import RL
 import matplotlib.pyplot as plt
 
-from src.MCTS_Rollout2 import MCTS_Rollout2
 from src.MCTS_Rollout import MCTS_Rollout
-
 
 from src.toric_model import Toric_code
 from src.toric_model import Action
@@ -65,7 +63,7 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 toric.plot_toric_code(toric.current_state, 'initial_syndrom')
             
             init_qubit_state = copy.deepcopy(toric.qubit_matrix)
-            mcts = MCTS_Rollout2('cpu', args, copy.deepcopy(toric), None) #Classic rollout MCTS
+            mcts = MCTS_Rollout('cpu', args, copy.deepcopy(toric), None) #Classic rollout MCTS
             # solve syndrome
             while terminal_state == 1 and num_of_steps_per_episode < num_of_steps:
                 steps_counter += 1
@@ -74,10 +72,6 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 # choose MCTS action
                  
                 _,_,_,action  = mcts.get_qs_actions()
-
-                # choose MCTS action
-                #mcts = MCTS_Rollout('cpu', args, copy.deepcopy(toric), None, last_best_action) #Classic rollout MCTS 
-                #_,_,_,action , last_best_action = mcts.get_qs_actions()
 
                 '''
                 print('___________________________________________________')
@@ -227,32 +221,6 @@ print('Nr of failed syndroms', nr_failed_syndroms, ' --> Win rate =',(num_of_pre
 #plot(system_size, PATH, plot_range)
 
 
-'''
-P_error = 0.2
-disscount_backprop = 0.9
-cpuct = np.sqrt(2) #OK
-reward_multiplier = 100
-device = 'cuda' #OK
-grid_shift = system_size//2 #OK
-prediction_list_p_error = [P_error] #OK
-minimum_nbr_of_qubit_errors = 0 #int(system_size/2)+1
-args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': system_size//2, 'discount_factor':disscount_backprop, \
-    'reward_multiplier':reward_multiplier}
-
-error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error, nr_failed_syndroms = predictionMCTS(
-    args = args,
-    num_of_predictions=num_of_predictions, 
-    num_of_steps=50, 
-    prediction_list_p_error=prediction_list_p_error,
-    minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
-    plot_one_episode=False,
-    system_size = system_size)
-
-print(error_corrected_list, 'error corrected')
-print(ground_state_list, 'ground state conserved')
-print(average_number_of_steps_list, 'average number of steps')
-print('Nr of failed syndroms', nr_failed_syndroms, ' --> Win rate =',(num_of_predictions-nr_failed_syndroms)/num_of_predictions)
-'''
 
 
 

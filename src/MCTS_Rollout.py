@@ -8,7 +8,7 @@ import random
 import time
 EPS = 1e-8
 
-class MCTS_Rollout2():
+class MCTS_Rollout():
 
     def __init__(self, device, args, toric_code=None, syndrom=None):
 
