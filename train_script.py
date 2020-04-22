@@ -74,21 +74,12 @@ if continue_training == True:
     PATH2 = 'network/'+str(NETWORK_FILE_NAME)+'.pt'
     rl.load_network(PATH2)
 
-<<<<<<< HEAD
 num_epochs = 300
 
 # train for n epochs the agent (test parameters)
 rl.train_for_n_epochs(training_steps=5,
                     num_of_predictions=5,
                     num_of_steps_prediction=45,
-=======
-num_epochs = 1
-
-# train for n epochs the agent (test parameters)
-rl.train_for_n_epochs(training_steps=10,
-                    num_of_predictions=100,
-                    num_of_steps_prediction=75,
->>>>>>> ebae4798751da532ef294496a220bd6aeb908d8c
                     epochs=num_epochs,
                     optimizer='Adam',
                     batch_size=32,
