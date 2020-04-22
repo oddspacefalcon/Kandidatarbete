@@ -38,7 +38,7 @@ class MCTS():
     def backpropagate(self, node):
         if node.parent:
             for s, a, r in self.visited_transition[::-1]:
-                Qa = r if r == 100 or r == -100 else self.discount_factor*node.Q.max().cpu().numpy() + r
+                Qa = r if r == 100 else self.discount_factor*node.Q.max().cpu().numpy() + r
                 node = node.parent
                 col = a.action - 1
                 row = next((row for row, perspective in enumerate(node.perspectives[1]) if perspective == a.position), None)
@@ -84,18 +84,19 @@ class MCTS():
                 
                 # take step
                 state.step(action)
-                self.visited_transition.append((s, action, self.get_reward(state)))
                 self.loop_check_temp.add(s)
+                s = np.array_str(state.next_state)
+                self.visited_transition.append((s, action, self.get_reward(state)))
                 state.current_state = state.next_state
-                s1 = np.array_str(state.current_state)
                 
-                if s1 not in node.child_nodes:
+                
+                if s not in node.child_nodes:
                     # create new node
                     new_node = self.Node()
                     new_node.parent = node
-                    node.child_nodes[s1] = new_node
+                    node.child_nodes[s] = new_node
 
-                self.search(state, node.child_nodes[s1], s1, loop_check)
+                self.search(state, node.child_nodes[s], s, loop_check)
 
     def get_reward(self, state):
         if np.all(state.next_state == 0):

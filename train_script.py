@@ -5,15 +5,12 @@ import torch
 import _pickle as cPickle
 from src.RL import RL
 from src.toric_model import Toric_code
-
 from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 
 ##########################################################################
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-#device = 'cpu'
 
 # valid network names: 
 #   NN_11
@@ -23,32 +20,34 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #   ResNet50
 #   ResNet101
 #   ResNet152
-NETWORK = NN_11
+NETWORK = NN_17
 
 # common system sizes are 3,5,7 and 9 
 # grid size must be odd! 
-SYSTEM_SIZE = 5
+SYSTEM_SIZE = 7
 
 # For continuing the training of an agent
-continue_training = True
+continue_training = False
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'size_5_size_5_NN_11_epoch_14_memory_proportional_optimizer_Adam__steps_14000_learning_rate_0.00025'
+NETWORK_FILE_NAME = 'size_7_NN_17_num_sim_40'
 
 # initialize RL class and training parameters 
 rl = RL(Network=NETWORK,
         Network_name=NETWORK_FILE_NAME,
         system_size=SYSTEM_SIZE,
-        p_error=0.1,
+        p_error_start=0.01,
+        p_error_step=0.01,
+        p_error_end=0.16,
+        increase_p_error_win_rate=0.8,
         replay_memory_capacity=1000, 
         learning_rate=0.00025,
-        max_nbr_actions_per_episode=50,
+        max_nbr_actions_per_episode=75,
         device=device,
         replay_memory='proportional',  # proportional or uniform
-        num_simulations=100, 
+        num_simulations=40,           
         discount_factor=0.95, 
-        epsilon=0.1, 
-        memory_reset=150)
-
+        epsilon=0.5,
+        target_update=400)
 
 # generate folder structure 
 timestamp = time.strftime("%y_%m_%d__%H_%M_%S__")
@@ -66,15 +65,12 @@ if continue_training == True:
 
 # train for n epochs the agent (test parameters)
 rl.train_for_n_epochs(training_steps=1000,
-                    num_of_predictions=200,
+                    num_of_predictions=100,
                     num_of_steps_prediction=50,
-                    epochs=50,
+                    epochs=100,
                     optimizer='Adam',
                     batch_size=32,
-                    directory_path = PATH,
-                    prediction_list_p_error=[0.1],
-                    replay_start_size=50)
-
+                    directory_path=PATH)
 
 """rl.train_for_n_epochs(training_steps=10000,
                             num_of_predictions=100,
