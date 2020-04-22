@@ -23,7 +23,11 @@ device = 'cuda' #torch.device("cuda" if torch.cuda.is_available() else "cpu")
 #   ResNet50
 #   ResNet101
 #   ResNet152
+<<<<<<< HEAD
 NETWORK = NN_11
+=======
+NETWORK = NN_17
+>>>>>>> ebae4798751da532ef294496a220bd6aeb908d8c
 
 # common system sizes are 3,5,7 and 9 
 # grid size must be odd! 
@@ -33,7 +37,11 @@ SYSTEM_SIZE = 5
 continue_training = False
 
 # this file is stored in the network folder and contains the trained agent.  
+<<<<<<< HEAD
 NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000'
+=======
+NETWORK_FILE_NAME = 'Size_11_NN_17'
+>>>>>>> ebae4798751da532ef294496a220bd6aeb908d8c
 start = start = time.time() 
 # initialize RL class and training parameters
 
@@ -66,12 +74,21 @@ if continue_training == True:
     PATH2 = 'network/'+str(NETWORK_FILE_NAME)+'.pt'
     rl.load_network(PATH2)
 
+<<<<<<< HEAD
 num_epochs = 300
 
 # train for n epochs the agent (test parameters)
 rl.train_for_n_epochs(training_steps=5,
                     num_of_predictions=5,
                     num_of_steps_prediction=45,
+=======
+num_epochs = 1
+
+# train for n epochs the agent (test parameters)
+rl.train_for_n_epochs(training_steps=10,
+                    num_of_predictions=100,
+                    num_of_steps_prediction=75,
+>>>>>>> ebae4798751da532ef294496a220bd6aeb908d8c
                     epochs=num_epochs,
                     optimizer='Adam',
                     batch_size=32,
