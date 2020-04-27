@@ -62,7 +62,7 @@ def predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_
         np.savetxt(PATH + '/data_result_solve_time.txt', data_result, delimiter=',', fmt="%s")
     return PATH
 
-def plot(PATH, plot_range, system_size):
+def get_data(PATH):
     with open(PATH + '\data_result_solve_time.txt')as f:
         content = f.readlines()
     content = [x.strip() for x in content]
@@ -70,8 +70,6 @@ def plot(PATH, plot_range, system_size):
     time = []
     avarage_nr_steps = []
     P_error= []
-    II =  []
-    i = 0
     for row in  content:    
         P_e, Time, steps = row.split(',')
         P_e = float(P_e)
@@ -82,30 +80,39 @@ def plot(PATH, plot_range, system_size):
             P_error.append(P_e)
             time.append(Time)
             avarage_nr_steps.append(steps)
-            II.append(i)
-            i = i+1
-    print(avarage_nr_steps)
     
+    return P_error, time, avarage_nr_steps
+
+def plot(PATH5,PATH9, PATH13, plot_range, system_size5, system_size9, system_size13):
+    P_error5, time5, avarage_nr_steps5 = get_data(PATH5)
+    P_error9, time9, avarage_nr_steps9 = get_data(PATH9)
+    P_error13, time13, avarage_nr_steps13 = get_data(PATH13)
+
     fig, ax1 = plt.subplots()
     ax1.set_ylabel('Tid [s]', fontsize=24)
     ax1.set_xlabel('$P_e$', fontsize=24)
     #ax1.scatter(P_error, time, label='d = '+str(system_size), color='steelblue', marker='o')
-    lns1 = ax1.plot(P_error,time, color='steelblue', label='Time')
+    #lns11 = ax1.plot(P_error5,time5, color='steelblue', label='Tid d = '+str(system_size5))
+    lns12 = ax1.plot(P_error9,time9, color='orange', label='Tid d = '+str(system_size9))
+    lns13 = ax1.plot(P_error13,time13, color='saddlebrown', label='Tid d = '+str(system_size13))
+
     ax1.set_xlim(0.005,plot_range*0.01+0.005)
 
     ax2 = ax1.twinx()
     ax2.set_ylabel('Medelantal drag', fontsize=24)
-    lns2 = ax2.plot(P_error,avarage_nr_steps, alpha = 0, label='Steg')
+    #lns21 = ax2.plot(P_error5,avarage_nr_steps5, '--',color='steelblue', alpha = 1, label='drag')
+    lns22 = ax2.plot(P_error9,avarage_nr_steps9, '--', color='orange',alpha = 1, label='drag d = '+str(system_size9))
+    lns23 = ax2.plot(P_error13,avarage_nr_steps13, '--', color='saddlebrown', alpha = 1, label='drag d = '+str(system_size13))
 
     # added these three lines
-    #lns = lns1+lns2
-    #labs = [l.get_label() for l in lns]
-    #plt.legend(lns, labs, loc=0, fontsize = 24)
+    lns = lns12+lns22+lns13+lns23
+    labs = [l.get_label() for l in lns]
+    plt.legend(lns, labs, loc=0, fontsize = 24)
     ax1.xaxis.set_tick_params(labelsize=24)
     ax1.yaxis.set_tick_params(labelsize=24)
     ax2.yaxis.set_tick_params(labelsize=24)
     plt.title('Prestation vid lyckad felkorrigering', fontsize=24)
-    plt.savefig(PATH+'/Result_plot'+'.png')
+    #plt.savefig('Results/Result_Time_plot'+'.png')
     plt.show()
 
 
@@ -120,8 +127,15 @@ plot_range = 10 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
 ########################################
 #PATH = predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
-PATH  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
-plot(PATH, plot_range, system_size)
+system_size5 = 5
+system_size9 = 9
+system_size13 = 13
+
+PATH5  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
+PATH9  = 'Results/Main_Size_9_ResNet18_memory_uniform_steps_5200_learning_rate_0.00025'
+PATH13  = 'Results/Main_Size_13_ResNet18_memory_uniform__steps_2300_learning_rate_0.00025'
+
+plot(PATH5,PATH9, PATH13, plot_range, system_size5, system_size9, system_size13)
 
 
 

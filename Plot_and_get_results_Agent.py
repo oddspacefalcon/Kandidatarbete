@@ -98,8 +98,8 @@ num_of_predictions = 10
 plot_range = 2 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
 ########################################
-PATH = predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
-#PATH  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
+#PATH = predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
+PATH  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
 plot(PATH, plot_range, system_size)
 
 

@@ -238,10 +238,10 @@ class Toric_code():
         X, Y = np.meshgrid(x,x)
         XLine, YLine = np.meshgrid(x, xLine)
 
-        markersize_qubit = 15
-        markersize_excitation = 7
-        markersize_symbols = 7
-        linewidth = 2
+        markersize_qubit = 9
+        markersize_excitation = 5
+        markersize_symbols = 5
+        linewidth = 1
 
         ax = plt.subplot(111)
         ax.plot(XLine, -YLine, 'black', linewidth=linewidth)

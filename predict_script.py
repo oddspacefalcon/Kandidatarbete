@@ -15,20 +15,20 @@ device = 'cuda'
 ##########################################################################
 
 # common system sizes are 3,5,7 and 9. Grid size must be odd! 
-system_size = 9
+system_size = 11
 
 # valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 network = ResNet18
 
 # this file is stored in the network folder and contains the trained agent.  
 #NETWORK_FILE_NAME = 'Size_5_NN_11' #Win rate 0.6999, P=0.15
-NETWORK_FILE_NAME = 'size_9_Size_9_ResNet18_epoch_9_memory_uniform_optimizer_Adam__steps_900_learning_rate_0.00025' #Win rate: 0.961, P=0.05
+NETWORK_FILE_NAME = 'Size_11_ResNet18_steps_24800_0.11' #Win rate: 0.961, P=0.05
 #NETWORK_FILE_NAME = 'Size_5_NN_11_steps_7150' #Win rate: 0.964, P=0.05
 
 # d = 11
 
 #NETWORK_FILE_NAME ='Size_5_NN_11'     # Main P_e=0.05 ->0.9535 __ P_e=0.03 ->0.9895 __ P_e=0.1 ->0.775__ P_e=0.15 ->0.5
-num_of_predictions = 100
+num_of_predictions = 1
 
 # initialize RL class
 rl = RL(Network=network,
@@ -38,7 +38,7 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.01]
+prediction_list_p_error = [0.11]
 # generate syndrome with a fixed amount of errors 
 minimum_nbr_of_qubit_errors = 0 #int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
@@ -53,11 +53,11 @@ PATH2 = 'network/'+str(NETWORK_FILE_NAME)+'.pt'
 print('Prediction')
 error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error = rl.prediction(
     num_of_predictions=num_of_predictions, 
-    num_of_steps=75, 
+    num_of_steps=125, 
     PATH=PATH2, 
     prediction_list_p_error=prediction_list_p_error,
     minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
-    plot_one_episode=False) # FÖR att plotta
+    plot_one_episode=True) # FÖR att plotta
 
 # runtime of prediction
 runtime = time.time()-start

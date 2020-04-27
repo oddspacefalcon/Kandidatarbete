@@ -46,7 +46,7 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
             last_best_action = None
             last_best_action_array = []
             
-            print('prediction nr', j)
+           
 
             # generate random syndrom
             toric = Toric_code(system_size)
@@ -73,13 +73,13 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                  
                 _,_,_,action  = mcts.get_qs_actions()
 
-                '''
+                
                 print('___________________________________________________')
                 print(toric.current_state)
                 print('-----------')
                 print('best action', action)
                 add1 = np.sum(toric.current_state)
-                '''
+                
      
                 prev_action = action
                 toric.step(action)
@@ -87,12 +87,14 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 terminal_state = toric.terminal_state(toric.current_state)
                 mcts.next_step(action)
                 
-                '''
+                
                 print(toric.current_state)
                 add2 = np.sum(toric.current_state)
                 print('sum diff: ', add1-add2)
                 print('Tot err left: ', add2)
-                '''
+                if j != 0:
+                    print('prediction nr', j, ' win rate: ', success_rate)
+                
 
                 if plot_one_episode == True and j == 0 and i == 0:
                     toric.plot_toric_code(toric.current_state, 'step_'+str(num_of_steps_per_episode))
@@ -110,6 +112,8 @@ def predictionMCTS(args,num_of_predictions=1, epsilon=0.0, num_of_steps=50, PATH
                 failed_syndroms.append(init_qubit_state)
                 failed_syndroms.append(toric.qubit_matrix)
                 nr_failed_syndroms += 1
+            
+            success_rate = (j+1 - np.sum(error_corrected)) / (j+1)
 
 
         success_rate = (num_of_predictions - np.sum(error_corrected)) / num_of_predictions
@@ -176,7 +180,7 @@ def plot(system_size5, PATH5, plot_range):
 
 system_size = 5
 num_sim = 70  #50
-num_of_predictions = 1000
+num_of_predictions = 50
 plot_range = 20 # plot from P_error = 0.01 to plot_range*0.01
 P_error = 0.08
 PATH = 'Results/MCTS_prediction__20_04_19__22__51__26__'
@@ -203,7 +207,7 @@ args = {'cpuct': cpuct, 'num_simulations':num_sim, 'grid_shift': system_size//2,
 error_corrected_list, ground_state_list, average_number_of_steps_list, failed_syndroms, prediction_list_p_error, nr_failed_syndroms = predictionMCTS(
     args = args,
     num_of_predictions=num_of_predictions, 
-    num_of_steps=55, 
+    num_of_steps=30, 
     prediction_list_p_error=prediction_list_p_error,
     minimum_nbr_of_qubit_errors=minimum_nbr_of_qubit_errors,
     plot_one_episode=True,

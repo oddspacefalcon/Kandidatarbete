@@ -31,7 +31,6 @@ def predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_
                 system_size=system_size,
                 device=device)
         
-        
         # generate syndrome with a random amount of errors 
         minimum_nbr_of_qubit_errors = 0 
     
