@@ -1,2 +1,0 @@
-# network, error corrected, ground state conserved, average number of steps, number of failed syndroms, runtime (h)
-Size_5_NN_11,10000,0.9994,0.9034,5.0,966.0,0.03886340068446265

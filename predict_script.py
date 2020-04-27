@@ -29,9 +29,9 @@ system_size = 7
 network = NN_17
 
 # this file is stored in the network folder and contains the trained agent.  
-NETWORK_FILE_NAME = 'size_7_size_7_NN_17_p02_epoch_10'
+NETWORK_FILE_NAME = 'size_7_size_7_NN_17_epoch_71'
 
-num_of_predictions = 100
+num_of_predictions = 1000
 
 # initialize RL class
 rl = RL(Network=network,
@@ -41,7 +41,7 @@ rl = RL(Network=network,
 
 # initial syndrome error generation 
 # generate syndrome with error probability 0.1 
-prediction_list_p_error = [0.10]
+prediction_list_p_error = [0.1]
 # generate syndrome with a fixed amount of errors 
 minimum_nbr_of_qubit_errors = int(system_size/2)+1 # minimum number of erorrs for logical qubit flip
 
@@ -75,5 +75,5 @@ print(runtime, 'h runtime')
 
   
 # save training settings in txt file 
-data_all = np.array([[NETWORK_FILE_NAME, num_of_predictions, error_corrected_list[0], ground_state_list[0],average_number_of_steps_list[0], len(failed_syndroms)/2, win_rate, runtime]])
+data_all = np.array([[NETWORK_FILE_NAME, num_of_predictions, error_corrected_list, ground_state_list,average_number_of_steps_list, len(failed_syndroms)/2, win_rate, runtime]])
 np.savetxt(PATH + '/data_all.txt', data_all, header='network, error corrected, ground state conserved, average number of steps, number of failed syndroms, win_rate, runtime (h)', delimiter=',', fmt="%s")

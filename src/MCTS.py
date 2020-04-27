@@ -89,7 +89,6 @@ class MCTS():
                 self.visited_transition.append((s, action, self.get_reward(state)))
                 state.current_state = state.next_state
                 
-                
                 if s not in node.child_nodes:
                     # create new node
                     new_node = self.Node()
@@ -103,8 +102,7 @@ class MCTS():
             return 100
         else:
             return np.sum(state.current_state) - np.sum(state.next_state)
-        
-                
+             
     def get_tree(self, old_tree, state, loop_check):
 
         self.model.eval()

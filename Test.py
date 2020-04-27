@@ -9,18 +9,36 @@ from src.util import convert_from_np_to_tensor
 import time
 import copy
 import random
+import matplotlib.pyplot as plt
 
 
-t = torch.tensor([1, 1, 2], device='cuda')
+# plot_range = 10
+# P_error =[0.05, 0.06]
+# P_success = [0.5, 0.6]
+
+
+# fig, ax = plt.subplots()
+# ax.scatter(P_error, P_success, label='d=5', color='blue', marker='o')
+# ax.legend(fontsize = 13)
+# ax.plot(P_error, P_success, color='blue')
+# ax.set_xlim(0.005, plot_range*0.01 + 0.005)
+# plt.xlabel('$P_e$', fontsize=16)
+# plt.ylabel('$P_s$', fontsize=16)
+
+# plt.tick_params(axis='both', labelsize=15)
+# #fig.set_figwidth(10)
+# plt.savefig('plots/plt1' '.png')
+# plt.show()
 
 
 
-batch_size = 5
+# with open('bajs', '+w') as f:
 
-t2 = torch.zeros((batch_size, *t.shape), device='cuda')
+#     l = [1, 2, 3]
+#     l2 = [1, 2, 3]
+
+#     f.write(str(l) + ',' + str(l2))
+#     f.write(str(l2))
 
 
-for i in range(batch_size):
-    t2[i] = t
 
-print(t2.shape)

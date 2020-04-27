@@ -169,7 +169,6 @@ class RL():
                 self.toric.current_state = self.toric.next_state
                 terminal_state = self.toric.terminal_state(self.toric.current_state)
 
-
                 #self.toric.plot_toric_code(self.toric.current_state, 'step_'+str(num_of_steps_per_episode))
 
                 # save transitions in memory
@@ -177,8 +176,8 @@ class RL():
                     self.memory.save((a, perspective, Q), 10000)  # max priority
                     samples_in_memory += 1
 
-                # reuse tree
-                old_tree = tree.child_nodes[np.array_str(self.toric.current_state)]
+                # reuse tree   
+                old_tree = tree.child_nodes.get(np.array_str(self.toric.current_state))
 
                 #print('training steps:', iteration) 
             
@@ -318,7 +317,7 @@ class RL():
 
 
             if win_rate > self.increase_p_error_win_rate and self.p_error < self.p_error_end:
-                self.p_error = min(self.p_error + self.p_error_step, self.p_error_end)
+                self.p_error = min(round(self.p_error + self.p_error_step, 2), self.p_error_end)
 
             # save training settings in txt file 
             np.savetxt(directory_path + '/data_all.txt', data_all, 
@@ -327,7 +326,7 @@ class RL():
             step = (i + 1) * training_steps
             PATH = directory_path + '/network_epoch/size_{2}_{1}_epoch_{0}.pt'.format(
                 i+1, self.network_name, self.system_size)
-
+                
             # if win_rate > best_win_rate:
             #     best_win_rate = win_rate
             #     self.save_network(PATH)
