@@ -92,26 +92,26 @@ def plot(PATH5,PATH9, PATH13, plot_range, system_size5, system_size9, system_siz
     ax1.set_ylabel('Tid [s]', fontsize=24)
     ax1.set_xlabel('$P_e$', fontsize=24)
     #ax1.scatter(P_error, time, label='d = '+str(system_size), color='steelblue', marker='o')
-    #lns11 = ax1.plot(P_error5,time5, color='steelblue', label='Tid d = '+str(system_size5))
-    lns12 = ax1.plot(P_error9,time9, color='orange', label='Tid d = '+str(system_size9))
-    lns13 = ax1.plot(P_error13,time13, color='saddlebrown', label='Tid d = '+str(system_size13))
+    lns11 = ax1.plot(P_error5,time5, color='steelblue', label='Tid d = '+str(system_size5))
+    #lns12 = ax1.plot(P_error9,time9, color='orange', label='Tid d = '+str(system_size9))
+    #lns13 = ax1.plot(P_error13,time13, color='saddlebrown', label='Tid d = '+str(system_size13))
 
     ax1.set_xlim(0.005,plot_range*0.01+0.005)
 
     ax2 = ax1.twinx()
     ax2.set_ylabel('Medelantal drag', fontsize=24)
-    #lns21 = ax2.plot(P_error5,avarage_nr_steps5, '--',color='steelblue', alpha = 1, label='drag')
-    lns22 = ax2.plot(P_error9,avarage_nr_steps9, '--', color='orange',alpha = 1, label='drag d = '+str(system_size9))
-    lns23 = ax2.plot(P_error13,avarage_nr_steps13, '--', color='saddlebrown', alpha = 1, label='drag d = '+str(system_size13))
+    lns21 = ax2.plot(P_error5,avarage_nr_steps5, '--',color='steelblue', alpha = 1, label='drag = '+str(system_size5))
+    #lns22 = ax2.plot(P_error9,avarage_nr_steps9, '--', color='orange',alpha = 1, label='drag d = '+str(system_size9))
+    #lns23 = ax2.plot(P_error13,avarage_nr_steps13, '--', color='saddlebrown', alpha = 1, label='drag d = '+str(system_size13))
 
     # added these three lines
-    lns = lns12+lns22+lns13+lns23
+    lns = lns11+lns21#lns12+lns22+lns13+lns23
     labs = [l.get_label() for l in lns]
     plt.legend(lns, labs, loc=0, fontsize = 24)
     ax1.xaxis.set_tick_params(labelsize=24)
     ax1.yaxis.set_tick_params(labelsize=24)
     ax2.yaxis.set_tick_params(labelsize=24)
-    plt.title('Prestation vid lyckad felkorrigering', fontsize=24)
+    plt.title('Prestation vid lyckad felkorrigering - MCTS rollout', fontsize=24)
     #plt.savefig('Results/Result_Time_plot'+'.png')
     plt.show()
 

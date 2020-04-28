@@ -46,7 +46,7 @@ def plot(system_size5, system_size7, system_size9, system_size11, system_size13,
     ax.set_xlim(0.005,plot_range*0.01+0.005)
     plt.xlabel('$P_e$', fontsize=24)
     plt.ylabel('$P_s$', fontsize=24)
-    plt.title('Prestanda för trändade agenter', fontsize=24)
+    plt.title('Prestanda för trändade agenter - MCTS rollout', fontsize=24)
     plt.tick_params(axis='both', labelsize=24)
     fig.set_figwidth(8)
     fig.set_figheight(5)

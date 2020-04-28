@@ -38,7 +38,7 @@ def plot(system_size5, PATH5, PATH_MCTS, plot_range):
     ax.set_xlim(0.005,plot_range*0.01+0.005)
     plt.xlabel('$P_e$', fontsize=24)
     plt.ylabel('$P_s$', fontsize=24)
-    plt.title('Jämförelse MCTS med rollout och tränat nätverk för d = 5', fontsize=24)
+    plt.title('Jämförelse MCTS rollout och tränat nätverk för d = 5', fontsize=24)
     plt.tick_params(axis='both', labelsize=24)
     fig.set_figwidth(8)
     fig.set_figheight(5)

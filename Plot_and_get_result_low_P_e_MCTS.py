@@ -82,9 +82,9 @@ def get_data(PATH):
             
 
 def plot(PATH, plot_range, system_size):
-    PATH5 = PATH +'/Rollout_5'
+    PATH5 = PATH +'/MCTS_5'
     P_success5, P_error5 = get_data(PATH5)
-    PATH9 = PATH +'/Rollout_9'
+    PATH9 = PATH +'/MCTS_9'
     P_success9, P_error9 = get_data(PATH9)
 
 
@@ -106,7 +106,7 @@ def plot(PATH, plot_range, system_size):
 
     plt.tick_params(axis='both', labelsize=24)
     #fig.set_figwidth(10)
-    plt.savefig(PATH+'/Result_Rollout_plot'+'.png')
+    plt.savefig(PATH+'/Result_plot'+'.png')
     plt.show()
 
 
