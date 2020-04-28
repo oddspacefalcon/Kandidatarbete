@@ -10,7 +10,7 @@ from src.toric_model import Toric_code
 from NN import NN_11, NN_17
 from ResNet import ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 
-def predict(plot_range, predict_nr, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode):
+def predict(plot_range, predict_nr, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode, p_error):
     # Generate folder structure, all results are stored in the data_results folder 
     timestamp = time.strftime("%y_%m_%d__%H__%M__%S__")
     PATH = 'drive/My Drive/Colab Notebooks/Results/prediction__' +str(NETWORK_FILE_NAME) +'__'+ timestamp
@@ -20,15 +20,10 @@ def predict(plot_range, predict_nr, device, system_size, network, NETWORK_FILE_N
     # Path for the network to use for the prediction
     PATH2 = 'drive/My Drive/Colab Notebooks/network/'+str(NETWORK_FILE_NAME)+'.pt'  
     data_result = np.zeros((1, 2))
-    for i in range(1):
+    for i in p_error:
         i += 1
-        #print(i)
-        #if i != 7:
-            #print(i)
-            #continue
-        #print('i:',i)
             
-        prediction_list_p_error = [0.001]
+        prediction_list_p_error = [i]
         start = time.time()
         # initialize RL class
         rl = RL(Network=network,
@@ -113,10 +108,11 @@ predict_nr = 1
 network = ResNet18 # Valid network names: NN_11, NN_17, ResNet18, ResNet34, ResNet50, ResNet101, ResNet152
 NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000' # this file is stored in the network folder and contains the trained agent.                                                             
 num_of_predictions = 1000000
-plot_range = 100 # plot from P_error = 0.01 to plot_range*0.01
+plot_range = 1000 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
+p_error = [0.0001, 0.0004 , 0.001, 0.004, 0.01]
 ########################################
-#PATH = predict(plot_range, predict_nr, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
+#PATH = predict(plot_range, predict_nr, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode, p_error)
 PATH  = 'Results/Fail_rate_low_P_error__Main_Size_5_NN_11_steps_7000__20_04_19__21__55__54__'
 plot(PATH, plot_range, system_size)
 
