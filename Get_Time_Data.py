@@ -71,8 +71,8 @@ def predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_
 device = 'cuda'
 system_size = 5
 network = NN_11
-NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000'                                                             
-num_of_predictions = 3000
+NETWORK_FILE_NAME = 'MCTS_size_5_NN_11_epoch_79'                                                             
+num_of_predictions = 4000
 plot_range = 10 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
 predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
@@ -83,8 +83,8 @@ predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_pred
 device = 'cuda'
 system_size = 9
 network = ResNet18
-NETWORK_FILE_NAME = 'Main_Size_9_ResNet18_memory_uniform_steps_5200_learning_rate_0.00025'                                                             
-num_of_predictions = 3000
+NETWORK_FILE_NAME = 'MCTS_size_9_NN_11_epoch_279'                                                             
+num_of_predictions = 4000
 plot_range = 10 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
 predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
@@ -95,8 +95,8 @@ predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_pred
 device = 'cuda'
 system_size = 13
 network = ResNet18
-NETWORK_FILE_NAME = 'Main_Size_13_ResNet18_memory_uniform__steps_2300_learning_rate_0.00025'                                                             
-num_of_predictions = 3000
+NETWORK_FILE_NAME = 'MCTS_Size_13_ResNet18_steps_15800_trained_to_P_0.09'                                                             
+num_of_predictions = 4000
 plot_range = 10 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
 predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
