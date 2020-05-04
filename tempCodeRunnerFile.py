@@ -1,1 +1,2 @@
-plt.tick_params(axis='both', labelsize=24)
+
+  

@@ -89,29 +89,30 @@ def plot(PATH5,PATH9, PATH13, plot_range, system_size5, system_size9, system_siz
     P_error13, time13, avarage_nr_steps13 = get_data(PATH13)
 
     fig, ax1 = plt.subplots()
-    ax1.set_ylabel('Tid [s]', fontsize=24)
+    #ax1.set_ylabel('Tid [s]', fontsize=24)
+    ax1.set_ylabel('Medelantal drag', fontsize=24)
     ax1.set_xlabel('$P_e$', fontsize=24)
     #ax1.scatter(P_error, time, label='d = '+str(system_size), color='steelblue', marker='o')
-    lns11 = ax1.plot(P_error5,time5, color='steelblue', label='Tid d = '+str(system_size5))
+    #lns11 = ax1.plot(P_error5,time5, color='steelblue', label='Tid d = '+str(system_size5))
     #lns12 = ax1.plot(P_error9,time9, color='orange', label='Tid d = '+str(system_size9))
     #lns13 = ax1.plot(P_error13,time13, color='saddlebrown', label='Tid d = '+str(system_size13))
 
     ax1.set_xlim(0.005,plot_range*0.01+0.005)
 
-    ax2 = ax1.twinx()
-    ax2.set_ylabel('Medelantal drag', fontsize=24)
-    lns21 = ax2.plot(P_error5,avarage_nr_steps5, '--',color='steelblue', alpha = 1, label='drag = '+str(system_size5))
-    #lns22 = ax2.plot(P_error9,avarage_nr_steps9, '--', color='orange',alpha = 1, label='drag d = '+str(system_size9))
-    #lns23 = ax2.plot(P_error13,avarage_nr_steps13, '--', color='saddlebrown', alpha = 1, label='drag d = '+str(system_size13))
+    #ax2 = ax1.twinx()
+    #ax2.set_ylabel('Medelantal drag', fontsize=24)
+    lns21 = ax1.plot(P_error5,avarage_nr_steps5,color='steelblue', alpha = 1, label='drag = 5')
+    lns22 = ax1.plot(P_error9,avarage_nr_steps9, color='green',alpha = 1, label='drag = 7')
+    lns23 = ax1.plot(P_error13,avarage_nr_steps13, color='orange', alpha = 1, label='drag = 9')
 
     # added these three lines
-    lns = lns11+lns21#lns12+lns22+lns13+lns23
+    lns =lns21+lns22+lns23 #lns12+lns22+lns13+lns23 #lns11+lns21
     labs = [l.get_label() for l in lns]
     plt.legend(lns, labs, loc=0, fontsize = 24)
     ax1.xaxis.set_tick_params(labelsize=24)
     ax1.yaxis.set_tick_params(labelsize=24)
-    ax2.yaxis.set_tick_params(labelsize=24)
-    plt.title('Prestation vid lyckad felkorrigering - MCTS rollout', fontsize=24)
+    #ax2.yaxis.set_tick_params(labelsize=24)
+    plt.title('Prestation vid lyckad felkorrigering - MCTS', fontsize=24)
     #plt.savefig('Results/Result_Time_plot'+'.png')
     plt.show()
 
@@ -123,7 +124,7 @@ network = ResNet18 # Valid network names: NN_11, NN_17, ResNet18, ResNet34, ResN
 #NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000' # this file is stored in the network folder and contains the trained agent.
 NETWORK_FILE_NAME = 'Main_Size_5_NN_11_steps_7000'                                                             
 num_of_predictions = 2000
-plot_range = 10 # plot from P_error = 0.01 to plot_range*0.01
+plot_range = 11 # plot from P_error = 0.01 to plot_range*0.01
 plot_one_episode = False
 ########################################
 #PATH = predict(plot_range, device, system_size, network, NETWORK_FILE_NAME, num_of_predictions, plot_one_episode)
@@ -131,9 +132,18 @@ system_size5 = 5
 system_size9 = 9
 system_size13 = 13
 
-PATH5  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
-PATH9  = 'Results/Main_Size_9_ResNet18_memory_uniform_steps_5200_learning_rate_0.00025'
-PATH13  = 'Results/Main_Size_13_ResNet18_memory_uniform__steps_2300_learning_rate_0.00025'
+#PATH5  = 'Results/Main_Size_5_NN_11_steps_epoch_7_steps_7000__20_04_15__11__54__14__'
+#PATH9  = 'Results/Main_Size_9_ResNet18_memory_uniform_steps_5200_learning_rate_0.00025'
+#PATH13  = 'Results/Main_Size_13_ResNet18_memory_uniform__steps_2300_learning_rate_0.00025'
+
+PATH5  = 'Result_Time_Test/prediction__MCTS_size_5_NN_11_epoch_79__20_04_28__13__41__57__'
+PATH9  = 'Result_Time_Test/prediction__MCTS_size_9_NN_11_epoch_279__20_04_28__13__46__39__'
+PATH13  = 'Result_Time_Test/prediction__MCTS_Size_13_ResNet18_steps_15800_trained_to_P_0.09__20_04_28__14__12__45__'
+
+#Pure MCTS 
+PATH5  = 'Results/MCTS_Pure_d=5'
+PATH7 = 'Results/MCTS_Pure_d=7'
+PATH9 = 'Results/MCTS_Pure_d=9'
 
 plot(PATH5,PATH9, PATH13, plot_range, system_size5, system_size9, system_size13)
 
