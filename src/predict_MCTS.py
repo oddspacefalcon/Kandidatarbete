@@ -98,7 +98,7 @@ class predict_MCTS():
                 prev_action = 0
                 terminal_state = 0
                 runtime = []
-                print('prediction nr ',j)
+                #print('prediction nr ',j)
                 # generate random syndrom
                 self.toric = Toric_code(self.system_size)
                 self.toric.generate_random_error(p_error)
